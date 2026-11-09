@@ -1,0 +1,320 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "CoPrompt Revibe — Architecture",
+    "locale": "en",
+    "output": "architecture.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "mechanisms",
+        "label": "Refer / request / share / link",
+        "focus": [
+          "editor",
+          "wiki",
+          "mech",
+          "tmpl",
+          "llm",
+          "msgs"
+        ],
+        "note": "Make a source node in the editor, pick a target in the wiki, the mechanism fills a template and calls the LLM."
+      },
+      {
+        "id": "python",
+        "label": "Running Python",
+        "focus": [
+          "editor",
+          "worker",
+          "cdn",
+          "csv"
+        ],
+        "note": "Run sends the cells above a block to Pyodide in a Web Worker; titanic.csv is fetched from the static host."
+      },
+      {
+        "id": "collaboration",
+        "label": "Two-window sync",
+        "focus": [
+          "editor",
+          "sync",
+          "bob"
+        ],
+        "note": "Every edit is saved to localStorage and broadcast to the other window; last writer wins per object."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "bob",
+      "type": "frontend",
+      "label": "Bob's window",
+      "sublabel": "?user=Bob · same app",
+      "pos": [
+        40,
+        90
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "sync",
+      "type": "messagebus",
+      "label": "Shared state",
+      "sublabel": "BroadcastChannel",
+      "pos": [
+        40,
+        270
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "+ localStorage"
+    },
+    {
+      "id": "cdn",
+      "type": "external",
+      "label": "jsDelivr CDN",
+      "sublabel": "Pyodide 0.26.4",
+      "pos": [
+        40,
+        450
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "editor",
+      "type": "frontend",
+      "label": "Block editor",
+      "sublabel": "prompts · nodes · code",
+      "pos": [
+        300,
+        270
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "wiki",
+      "type": "frontend",
+      "label": "Prompt Wiki",
+      "sublabel": "pick a target node",
+      "pos": [
+        560,
+        90
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "mech",
+      "type": "backend",
+      "label": "Mechanisms",
+      "sublabel": "refer · request · share · link",
+      "pos": [
+        560,
+        270
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "msgs",
+      "type": "frontend",
+      "label": "Messages panel",
+      "sublabel": "actions + status",
+      "pos": [
+        560,
+        450
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "tmpl",
+      "type": "backend",
+      "label": "LLM templates",
+      "sublabel": "add · edit · link · request",
+      "pos": [
+        820,
+        270
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "Pyodide worker",
+      "sublabel": "Python in a Web Worker",
+      "pos": [
+        300,
+        450
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "llm",
+      "type": "external",
+      "label": "DeepSeek API",
+      "sublabel": "or Claude · own key",
+      "pos": [
+        1080,
+        270
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "csv",
+      "type": "database",
+      "label": "titanic.csv",
+      "sublabel": "data/ · Kaggle train set",
+      "pos": [
+        300,
+        640
+      ],
+      "size": [
+        160,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Alice's window · index.html (vanilla JS, no build)",
+      "wraps": [
+        "editor",
+        "wiki",
+        "mech",
+        "msgs",
+        "tmpl",
+        "worker"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Static host · GitHub Pages / localhost:8765",
+      "wraps": [
+        "csv"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "edit-to-state",
+      "from": "editor",
+      "to": "sync",
+      "label": "every edit"
+    },
+    {
+      "id": "state-to-bob",
+      "from": "sync",
+      "to": "bob",
+      "label": "broadcast"
+    },
+    {
+      "id": "source-node",
+      "from": "editor",
+      "to": "mech",
+      "label": "source node",
+      "variant": "emphasis"
+    },
+    {
+      "id": "target-node",
+      "from": "wiki",
+      "to": "mech",
+      "label": "target",
+      "labelDy": 24
+    },
+    {
+      "id": "fill-template",
+      "from": "mech",
+      "to": "tmpl",
+      "label": "fill template",
+      "variant": "emphasis"
+    },
+    {
+      "id": "llm-call",
+      "from": "tmpl",
+      "to": "llm",
+      "label": "HTTPS · JSON",
+      "variant": "emphasis"
+    },
+    {
+      "id": "log-action",
+      "from": "mech",
+      "to": "msgs",
+      "label": "log action",
+      "labelDy": 24
+    },
+    {
+      "id": "run-cells",
+      "from": "editor",
+      "to": "worker",
+      "label": "Run",
+      "labelDy": 24
+    },
+    {
+      "id": "load-pyodide",
+      "from": "cdn",
+      "to": "worker",
+      "label": "pyodide.js",
+      "variant": "dashed"
+    },
+    {
+      "id": "fetch-csv",
+      "from": "csv",
+      "to": "worker",
+      "label": "fetch",
+      "labelDy": -30
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Static, no backend",
+      "items": [
+        "One index.html served as-is",
+        "Same files on localhost or GitHub Pages"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Collaboration",
+      "items": [
+        "Bob's edits flow back the same way",
+        "Last writer wins per block / action"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "External calls",
+      "items": [
+        "LLM key stays in each viewer's browser",
+        "Needs internet for Pyodide + LLM"
+      ]
+    }
+  ]
+}
