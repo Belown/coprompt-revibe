@@ -25,8 +25,9 @@ export function closeModal(m, value) {
   queue = queue.filter(x => x !== m); emit(); m.res(value);
   setTimeout(() => closedHooks.forEach(f => f()), 50);
 }
-// body: string or string[] (paragraphs); returns true / the typed text on confirm, null on cancel
-export async function ask(body, { title, input = false, value, placeholder = '', ok = 'OK', cancel = 'Cancel' } = {}) {
-  const r = await openModal({ title, body: [].concat(body), fields: input ? [{ key: 'v', value, placeholder }] : [], ok, cancel });
+// body: string or string[] (paragraphs); returns true / the typed text on confirm, null on cancel.
+// sticky: a click outside does not close it (when Cancel means something, e.g. Decline)
+export async function ask(body, { title, input = false, value, placeholder = '', ok = 'OK', cancel = 'Cancel', sticky = false } = {}) {
+  const r = await openModal({ title, body: [].concat(body), fields: input ? [{ key: 'v', value, placeholder }] : [], ok, cancel, sticky });
   return r ? (input ? r.v : true) : null;
 }

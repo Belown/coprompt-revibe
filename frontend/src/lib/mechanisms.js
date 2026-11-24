@@ -175,7 +175,7 @@ export async function checkShares() {
   const ok = await ask([`From “${text(S.blocks[a.src.b])}” into your ${into ? 'task' : 'prompt'} “${label(a.tgt)}”.`,
     ...(a.msg ? [`Note from ${a.by}: ${a.msg}`] : []),
     into ? 'Accepting attaches it as context for prompts under this task.' : 'Accepting regenerates your block’s code with it.'],
-    { title: `${a.by} shared “${label(a.src)}” with you`, ok: 'Accept', cancel: 'Decline' });
+    { title: `${a.by} shared “${label(a.src)}” with you`, ok: 'Accept', cancel: 'Decline', sticky: true }); // a click outside must not decline
   const cur = S.actions[a.id]; cur.status = ok ? 'accepted' : 'declined'; cur.seen = [...new Set([...cur.seen, ME])];
   put('actions', cur);
   if (!ok) return;

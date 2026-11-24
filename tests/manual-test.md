@@ -78,7 +78,7 @@ Every step says who acts (**A** = Alice's window, **B** = Bob's). Type the text 
 | # | Who | Do | Expect |
 |---|---|---|---|
 | 8.1 | A, B | Click **Live cursors** in both headers. | The button turns blue. Moving the mouse anywhere in one window (a block, the header, the Wiki) shows a named arrow at the same spot in the other, even when the windows are of different sizes. |
-| 8.2 | A | Point at the **API key** button, then click it. | In B, the API key button gets a box in Alice's colour, and her click shows as a ripple. As soon as her dialog opens, her arrow disappears from B (the dialog exists only in her window). It comes back when she closes it and moves the mouse. |
+| 8.2 | A | Point at the **API key** button, then click it. | In B, the API key button gets a box in Alice's colour, and her click shows as a ripple. As soon as her dialog opens, her arrow disappears from B (the dialog exists only in her window), and the API key button stays boxed with her name until she closes it. Her arrow comes back when she moves the mouse. The ⋯ menu works the same way, and in A the ⋯ button stays pressed while its menu is open. |
 | 8.3 | A | Close the dialog, then click **Live cursors** again. | Alice's arrow disappears from B at once, and A no longer sees Bob's. |
 
 ## 9. Away and back

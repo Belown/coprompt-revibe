@@ -9,7 +9,8 @@ export function Modal() {
   if (!m) return <div id="modal" hidden />;
   // inputs are uncontrolled; their values are read on confirm
   const done = ok => closeModal(m, ok ? Object.fromEntries([...ref.current.querySelectorAll('input[data-k]')].map(i => [i.dataset.k, i.value])) : null);
-  return <div id="modal">
+  // a press on the backdrop (outside the dialog) cancels it, unless cancelling decides something (sticky: a share)
+  return <div id="modal" onMouseDown={e => { if (e.target === e.currentTarget && !m.sticky) done(false); }}>
     <div key={m.id} ref={ref} className="dlg" role="dialog" aria-modal="true"
       onKeyDown={e => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); }}>
       {m.title && <h3>{m.title}</h3>}

@@ -124,6 +124,7 @@ try {
   const shareP = B.ev(`mech('share', byText('drop columns').id, document.body)`);
   check(await B.ev(`until(() => clickOK('matrix is ready'))`), 'share dialog (optional note) answered');
   await shareP;
+  check(await A.ev(`(async()=>{ await until(() => document.querySelector('#modal')?.textContent.includes('Note from Bob')); document.querySelector('#modal').dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); await tick(); return !!document.querySelector('#modal .dlg'); })()`), 'a click outside the share pop-up does not decline it');
   check(await A.ev(`until(() => document.querySelector('#modal')?.textContent.includes('Note from Bob: matrix is ready') && clickOK())`), 'share pop-up shows the note and is accepted');
   check(await A.ev(`until(() => acts('share', a => a.status === 'accepted').length === 1 && nHist(byText('drop columns').id, 'share') === 1)`), 'accepted share regenerates Alice’s block');
 
@@ -233,6 +234,9 @@ try {
     const m = document.querySelector('#modal'), url = m.querySelector('.copyrow input').value, ok = m.querySelector('.qr').src.startsWith('data:image/svg+xml')
       && url.includes('room=') && !url.includes('user=') && !m.querySelector('.btns button:not(.primary)');
     m.querySelector('.btns .primary').click(); await until(() => !document.querySelector('#modal .dlg')); return ok; })()`), 'Invite opens a pop-up with a QR code and the session link (no ?user=), closed with Done');
+  check(await A.ev(`(async()=>{ document.querySelector('#invite').click(); await until(() => document.querySelector('#modal .dlg'));
+    const m = document.querySelector('#modal'); m.querySelector('.dlg').dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); await tick();
+    const kept = !!m.querySelector('.dlg'); m.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); return kept && until(() => !document.querySelector('#modal .dlg')); })()`), 'a click inside a pop-up keeps it; a click outside closes it');
   // live cursors: opt-in on both sides; Alice's pointer over a block shows in Bob's window, and goes when she turns it off
   check(await B.ev(`!document.querySelector('.cursor')`), 'no live cursors until turned on');
   for (const P of [A, B]) await P.ev(`document.querySelector('#cursors').click(); 1`);
@@ -245,12 +249,19 @@ try {
     t.dispatchEvent(new MouseEvent('mousemove', o)); t.dispatchEvent(new MouseEvent('mousedown', o)); return 1; })()`);
   check(await B.ev(`until(() => { const b = document.querySelector('.cursor-box'), s = document.querySelector('#settings').getBoundingClientRect(); if (!b || !document.querySelector('.cursor-click')) return false;
     const r = b.getBoundingClientRect(); return Math.abs(r.left + 3 - s.left) < 2 && Math.abs(r.width - 6 - s.width) < 2; })`), 'Alice’s pointer on the header’s API key button: Bob sees it boxed, and her click');
-  await A.ev(`document.querySelector('#settings').click(); 1`); // a dialog only Alice sees
-  check(await B.ev(`until(() => !document.querySelector('.cursor'))`), 'opening a dialog hides Alice’s pointer for Bob at once');
+  await A.ev(`(()=>{ const t = document.querySelector('#settings'), r = t.getBoundingClientRect(); t.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); t.click(); return 1; })()`); // a dialog only Alice sees
+  check(await B.ev(`until(() => { const h = document.querySelector('.cursor-box.held'), t = document.querySelector('#settings').getBoundingClientRect(); if (!h || document.querySelector('.cursor')) return false;
+    const r = h.getBoundingClientRect(); return h.querySelector('b').textContent === 'Alice' && Math.abs(r.left + 3 - t.left) < 2 && Math.abs(r.width - 6 - t.width) < 2; })`), 'Alice opens the API key dialog: Bob sees no arrow, the button stays boxed with her name');
   await A.ev(`(async()=>{ await until(() => document.querySelector('#modal .dlg')); document.querySelector('#modal .btns button').click();
     await until(() => !document.querySelector('#modal .dlg')); await new Promise(r => setTimeout(r, 200));
     const t = document.querySelector('#settings'), r = t.getBoundingClientRect(); t.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: r.left + 5, clientY: r.top + 5 })); return 1; })()`);
-  check(await B.ev(`until(() => document.querySelector('.cursor span')?.textContent === 'Alice')`), 'dialog closed: her pointer is back on her next move');
+  check(await B.ev(`until(() => document.querySelector('.cursor span')?.textContent === 'Alice' && !document.querySelector('.cursor-box.held'))`), 'dialog closed: the box is released, her pointer is back on her next move');
+  await A.ev(`(()=>{ const t = document.querySelector('#morebtn'), r = t.getBoundingClientRect(); t.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); t.click(); return 1; })()`); // the ⋯ menu (a native popover)
+  check(await B.ev(`until(() => { const h = document.querySelector('.cursor-box.held'), t = document.querySelector('#morebtn').getBoundingClientRect(); if (!h || document.querySelector('.cursor')) return false;
+    const r = h.getBoundingClientRect(); return h.querySelector('b').textContent === 'Alice' && Math.abs(r.left + 3 - t.left) < 2 && Math.abs(r.width - 6 - t.width) < 2; })`) && await A.ev(`until(() => getComputedStyle(document.querySelector('#morebtn')).backgroundColor !== getComputedStyle(document.querySelector('#invite')).backgroundColor)`),
+    'Alice opens the ⋯ menu: its button stays highlighted, for her and (boxed) for Bob');
+  await A.ev(`document.querySelector('#more').hidePopover(); 1`);
+  check(await B.ev(`until(() => !document.querySelector('.cursor-box.held'))`), 'menu closed: the box is released');
   await A.ev(`document.querySelector('#cursors').click(); 1`);
   check(await B.ev(`until(() => !document.querySelector('.cursor'))`), 'turning live cursors off removes the pointer for others');
 

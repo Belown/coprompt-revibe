@@ -58,6 +58,7 @@ header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px
 #pystat[data-s=err]::before{background:var(--err);box-shadow:0 0 0 3px var(--err-soft)}
 .brand,#me,#conn,#pystat{white-space:nowrap}
 #morebtn{padding:7px 9px}
+#morebtn:has(+ #more:popover-open){background:var(--sunken);border-color:var(--line-2)} /* stays pressed while its menu is open */
 #morebtn .ic{width:18px;height:18px}
 /* the session menu sits under the … button at the header's right edge */
 #more{position:fixed;inset:58px 20px auto auto;margin:0;min-width:220px;padding:6px;display:none;flex-direction:column;gap:2px;
@@ -331,6 +332,8 @@ i[data-unlink]{cursor:pointer;box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px va
 .cursor-box{position:fixed;left:0;top:0;z-index:24;box-sizing:border-box;pointer-events:none;border:2px solid var(--who);border-radius:9px;
   box-shadow:0 0 0 3px color-mix(in srgb,var(--who) 18%,transparent);transition:transform .1s linear,width .1s,height .1s}
 .cursor-click{position:absolute;left:3px;top:3px;width:28px;height:28px;margin:-14px 0 0 -14px;border:2px solid var(--who);border-radius:50%;animation:cclick .5s ease-out forwards}
+.cursor-box.held{background:color-mix(in srgb,var(--who) 12%,transparent)}
+.cursor-box b{position:absolute;left:-2px;top:100%;margin-top:3px;padding:0 6px;border-radius:5px;background:var(--who);color:#fff;font:500 11.5px/1.6 var(--font);white-space:nowrap}
 @keyframes cclick{from{transform:scale(.3);opacity:1}to{transform:scale(1.5);opacity:0}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 

@@ -2,7 +2,8 @@
 // element both windows have (a block, a wiki row, or an element with an id: header buttons, panels, the editor),
 // as fractions of its box, so it lands on the same thing whatever each person's window size or scroll.
 // The button or row under a collaborator's pointer gets a box in their colour, and their clicks ripple.
-// While this user has a dialog open (only they see it), their pointer is hidden for everyone else.
+// While this user has a dialog or the ⋯ menu open (only they see it), their pointer is hidden for everyone else and
+// the button that opened it stays boxed, with their name, until it closes.
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ui, CUR, onCursors, cursorsVersion, sendCursor } from '../lib/store.js';
 import { ucol } from '../lib/util.js';
@@ -37,9 +38,11 @@ export default function Cursors() {
   }, []);
 
   const dialog = isModalOpen();
-  useEffect(() => { // send mine, at most 10 a second (the server drops a connection past 30); none while a dialog is open
-    if (!ui.cursors || dialog) return;
-    let pending = null, sent, timer = null, last = 0, pos = null, clicks = 0;
+  const sync = useRef(null); // tells the sender below that a dialog or menu opened or closed
+  useEffect(() => { sync.current?.(); }, [dialog]);
+  useEffect(() => { // send mine, at most 10 a second (the server drops a connection past 30)
+    if (!ui.cursors) return;
+    let pending = null, sent, timer = null, last = 0, pos = null, clicks = 0, opener = null;
     const flush = () => {
       timer = null; last = Date.now();
       const k = JSON.stringify(pending);
@@ -51,20 +54,34 @@ export default function Cursors() {
       const r = hit[1].getBoundingClientRect(); if (!r.width || !r.height) return null;
       return { a: hit[0], x: frac((e.clientX - r.left) / r.width), y: frac((e.clientY - r.top) / r.height) };
     };
-    const onMove = e => { const p = place(e); if (p) { pos = p; queue({ ...p, k: clicks }); } };
-    const onDown = e => { const p = place(e) || pos; if (p) { pos = p; queue({ ...p, k: ++clicks }); } }; // a count, so a quick click is never lost
-    const onOut = e => { if (!e.relatedTarget) { pos = null; queue(null); } }; // left the window
+    const isOpen = () => isModalOpen() || !!document.querySelector(':popover-open');
+    let wasOpen = isOpen();
+    sync.current = () => {
+      const o = isOpen(); if (o === wasOpen) return; wasOpen = o;
+      // opened right after a click: hold a box on what was clicked; opened by itself (a share arriving): just hide
+      queue(o && opener && Date.now() - opener.t < 2000 ? { ...opener.p, k: clicks, h: 1 } : null);
+    };
+    const onMove = e => { if (isOpen()) return; const p = place(e); if (p) { pos = p; queue({ ...p, k: clicks }); } };
+    const onDown = e => { // a click count, so a quick click is never lost
+      if (isOpen()) return;
+      const p = place(e) || pos; if (!p) return;
+      pos = p; opener = { p, t: Date.now() }; queue({ ...p, k: ++clicks });
+    };
+    const onOut = e => { if (!e.relatedTarget && !isOpen()) { pos = null; queue(null); } }; // left the window
+    const onToggle = () => sync.current?.(); // a native popover (the ⋯ menu) opened or closed
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mousedown', onDown, true);
     document.addEventListener('mouseout', onOut);
+    document.addEventListener('toggle', onToggle, true);
     return () => {
-      clearTimeout(timer);
+      clearTimeout(timer); sync.current = null;
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mousedown', onDown, true);
       document.removeEventListener('mouseout', onOut);
+      document.removeEventListener('toggle', onToggle, true);
       sendCursor(null);
     };
-  }, [ui.cursors, dialog]); // opening a dialog runs the cleanup above, which hides the pointer at once
+  }, [ui.cursors]);
 
   if (!ui.cursors) return null;
   return Object.entries(CUR).map(([u, c]) => {
@@ -75,9 +92,10 @@ export default function Cursors() {
     const hot = document.elementFromPoint(x, y)?.closest(HOT)?.getBoundingClientRect();
     if (!(u in firstK.current)) firstK.current[u] = c.k;
     const who = { '--who': ucol(u) };
+    const box = hot && { ...who, transform: `translate(${hot.left - 3}px, ${hot.top - 3}px)`, width: hot.width + 6, height: hot.height + 6 };
+    if (c.h) return box ? <div key={u} className="cursor-box held" aria-hidden="true" style={box}><b>{u}</b></div> : null; // their dialog or menu is open
     return <Fragment key={u}>
-      {hot && <div className="cursor-box" aria-hidden="true"
-        style={{ ...who, transform: `translate(${hot.left - 3}px, ${hot.top - 3}px)`, width: hot.width + 6, height: hot.height + 6 }} />}
+      {box && <div className="cursor-box" aria-hidden="true" style={box} />}
       <div className="cursor" aria-hidden="true" style={{ ...who, transform: `translate(${x}px, ${y}px)` }}>
         {c.k !== firstK.current[u] && <i key={c.k} className="cursor-click" />}
         <svg viewBox="0 0 24 24"><path d="M4.04 4.69a.5.5 0 0 1 .65-.65l16 6.5a.5.5 0 0 1-.06.95l-6.13 1.58a2 2 0 0 0-1.43 1.43l-1.58 6.13a.5.5 0 0 1-.95.06z" /></svg>

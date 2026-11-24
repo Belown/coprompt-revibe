@@ -125,11 +125,12 @@ function onMessage(ws, m, size) {
       }
       return;
     }
-    case 'cursor': { // a live mouse pointer: an anchor element, the position in it as fractions, a click count; not stored
+    case 'cursor': { // a live mouse pointer: an anchor element, the position in it as fractions, a click count, h = held
+      // (their dialog or menu is open: the others box the button that opened it); not stored
       const c = m.c, ok = c && typeof c === 'object' && typeof c.a === 'string' && ANCHOR.test(c.a)
         && [c.x, c.y].every(v => Number.isFinite(v) && v >= 0 && v <= 1) && (c.k == null || (Number.isSafeInteger(c.k) && c.k >= 0));
       ws.cur = true;
-      return others(ws, { t: 'cursor', user: ws.user, c: ok ? { a: c.a, x: c.x, y: c.y, k: c.k || 0 } : null });
+      return others(ws, { t: 'cursor', user: ws.user, c: ok ? { a: c.a, x: c.x, y: c.y, k: c.k || 0, ...(c.h === 1 && { h: 1 }) } : null });
     }
     case 'busy': {
       if (typeof m.id !== 'string' || !NAME.test(m.id)) return;

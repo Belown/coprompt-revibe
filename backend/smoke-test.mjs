@@ -72,6 +72,8 @@ try {
   assert.equal((await C.next('presence')).user, 'Alice', 'late joiner sees current presence');
   A.send({ t: 'cursor', c: { a: 'id:settings', x: 0.5, y: 0.25, k: 3 } });
   assert.deepEqual(await C.next('cursor'), { t: 'cursor', user: 'Alice', c: { a: 'id:settings', x: 0.5, y: 0.25, k: 3 } });
+  A.send({ t: 'cursor', c: { a: 'id:settings', x: 0.5, y: 0.5, k: 4, h: 1 } });
+  assert.equal((await C.next('cursor')).c.h, 1, 'a held pointer (dialog open) keeps its mark');
   A.send({ t: 'cursor', c: { a: 'q:"]<x>', x: 0.5, y: 0 } });
   assert.equal((await C.next('cursor')).c, null, 'a cursor with a bad anchor is relayed as hidden');
   A.send({ t: 'cursor', c: { a: 'b:x', x: 9, y: 0 } });
