@@ -38,7 +38,7 @@ coprompt-revibe.wangleishen.com/api/    sync backend  WebSocket at /api/?room=â€
 - **Domain and TLS.** `coprompt-revibe.wangleishen.com` is one level below `wangleishen.com`, so Cloudflare's free Universal SSL certificate covers it when the record is proxied or tunnelled. Because the backend is same-origin, there is no separate API domain, and `ALLOWED_ORIGINS` only needs this domain (plus `http://localhost:8000` for development).
 - **LLM proxy** (`backend/llm.js`). With `DEEPSEEK_API_KEY` (and/or `ANTHROPIC_API_KEY`) set in `.env`, people without a key use the server's. The key stays on the server: it is never sent to browsers, and the provider's auth errors (which quote part of the key) are replaced. Guards: allowed Origin, an optional access code (`LLM_ACCESS_CODE`), a model allowlist, a `max_tokens` cap, a **daily cap for everyone** (`LLM_DAILY_LIMIT`, which bounds the bill), and a per-IP rate. The daily count is kept in memory, so a restart resets it. Anyone who can open the site can spend the shared budget unless an access code is set.
 - **Never commit an API key or `.env`.**
-- The sync server has no authentication: anyone who knows a room name and opens the page from an allowed origin can edit that room. Use unguessable room names (the default is random) for anything private.
+- The sync server has no authentication: anyone who knows a room name and opens the page from an allowed origin can edit that room. A new session gets a random 4-digit id, which is easy to share but also easy to guess: for anything private, type a long session name of your own on the join screen.
 
 ### Sync protocol (`backend/server.js`, `frontend/src/lib/sync.js`)
 

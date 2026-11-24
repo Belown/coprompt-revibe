@@ -1,6 +1,7 @@
 // Shown when the URL has no ?user=: pick a name and a session (room). Imports nothing from the store,
 // so nothing connects before the user is known.
-export const newRoom = () => Math.random().toString(36).slice(2, 10);
+// ponytail: 4 random digits, easy to say aloud; guessable and may land on a session in use. Longer ids if rooms must stay private.
+export const newRoom = () => String(Math.floor(Math.random() * 10000)).padStart(4, '0');
 const ROOM_OK = s => s.trim().replace(/[^\w-]+/g, '-').slice(0, 64); // the backend accepts [\w-]{1,64}
 
 export default function Join() {
