@@ -9,7 +9,7 @@ import { WebSocketServer } from 'ws';
 const env = process.env;
 const PORT = +env.PORT || 8787;
 const DATA_DIR = path.resolve(env.DATA_DIR || './data');
-const ORIGINS = (env.ALLOWED_ORIGINS || 'https://coprompt.wangleishen.com,http://localhost:8000').split(',').map(s => s.trim());
+const ORIGINS = (env.ALLOWED_ORIGINS || 'https://app.coprompt-revibe.wangleishen.com,http://localhost:8000').split(',').map(s => s.trim());
 const MAX_MSG_BYTES = +env.MAX_MSG_BYTES || 2 * 1024 * 1024; // a block carries its outputs (plots) and history
 const MAX_CONN_PER_ROOM = +env.MAX_CONN_PER_ROOM || 20;
 const MAX_ROOMS = +env.MAX_ROOMS || 100;                    // rooms on disk; caps what an anonymous client can create
