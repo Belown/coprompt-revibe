@@ -31,6 +31,7 @@ export default function Header() {
     if (await ask('Clears the shared notebook in every open window and restores the Titanic scenario. This cannot be undone.', { title: 'Reset the demo?', ok: 'Reset notebook' })) resetDemo();
   };
   return <header>
+    <img className="logo" src="../favicon.svg" alt="" width="28" height="28" />
     <h1 className="brand">CoPrompt <small>revibe · CHI ’24</small></h1>
     <span id="me"><Avatar u={ME} />You are {ME}</span>
     <span className="grow" />
