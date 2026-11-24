@@ -192,6 +192,12 @@ try {
   await A.ev(`moveBlock('${cId}', byText('drop columns').id, false)`);
   check(await B.ev(`until(() => { const o = ordered().map(b => b.id); return o.indexOf('${cId}') === o.indexOf(byText('drop columns').id) - 1; })`), 'reordering moves the block (synced)');
   check(await A.ev(`document.querySelectorAll('#editor .grip').length === ordered().length`), 'every block has a drag handle');
+  // outline: Shift+Tab / Tab move a heading and its subheadings together; no deeper than one below the heading above
+  const lv = `['Feature Analysis','3. Feature','5. Deal'].map(t => S.blocks[hid(t)].level).join()`;
+  await A.ev(`indent(hid('Feature Analysis'), -1)`);
+  check(await B.ev(`until(() => ${lv} === '1,2,2' && getComputedStyle(el(hid('3. Feature'))).getPropertyValue('--d') === '1')`), 'outdent moves the section’s subheadings with it (synced, re-indented)');
+  await A.ev(`indent(hid('Feature Analysis'), 1); indent(hid('Data Preparation'), 1)`);
+  check(await A.ev(`${lv} === '2,3,3' && S.blocks[hid('Data Preparation')].level === 2`), 'indent restores it; indenting past the heading above is refused');
 
   // 8. earlier bug fixes: focused-but-untouched prompt takes remote edits; trailing space trimmed; deleted blocks silence links
   await B.ev(`(()=>{ const p = el(byText('drop columns').id).querySelector('.prompt'); p.focus(); return document.activeElement === p; })()`);

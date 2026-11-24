@@ -4,7 +4,7 @@ import { Avatar, Dots, Chip, MechTag } from './bits.jsx';
 import { S, ui } from '../lib/store.js';
 import { emit } from '../lib/bus.js';
 import { MECH } from '../lib/util.js';
-import { ordered, actsOn, label } from '../lib/model.js';
+import { ordered, actsOn, label, depths } from '../lib/model.js';
 import { mech } from '../lib/mechanisms.js';
 import { jump } from '../lib/promptDom.js';
 
@@ -18,24 +18,24 @@ function Pills({ b }) { // a section (heading) as source can only be linked or s
 
 export default function Wiki() {
   const src = ui.SOURCE, secSrc = S.blocks[src?.b]?.kind === 'h';
-  const rows = []; let hl = 0, hideAt = null;
+  const rows = [], dep = depths(); let hideAt = null;
   for (const b of ordered()) {
     if (b.kind === 'h' && hideAt !== null && b.level <= hideAt) hideAt = null;
     if (hideAt !== null) continue;
     if (b.kind === 'h') {
-      hl = b.level; const folded = ui.FOLD.has(b.id);
+      const folded = ui.FOLD.has(b.id);
       const fold = () => { folded ? ui.FOLD.delete(b.id) : ui.FOLD.add(b.id); emit(); };
-      rows.push(<div key={b.id} className="wrow wh" style={{ paddingLeft: (b.level - 1) * 14 + 4 }} data-bid={b.id}>
+      rows.push(<div key={b.id} className="wrow wh" style={{ paddingLeft: dep[b.id] * 14 + 4 }} data-bid={b.id}>
         <span className="fold" role="button" tabIndex={0} aria-label={folded ? 'Expand' : 'Collapse'} aria-expanded={!folded} onClick={fold}
           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fold(); } }}><Icon name={folded ? 'right' : 'down'} /></span>
-        <span className="hl">H{b.level}</span><Avatar u={b.author} />
+        <Avatar u={b.author} />
         <span className="wtext" onClick={() => jump(b.id)}>{b.text || '(untitled)'}</span>
         <Dots types={types(b.id)}>{(b.ctx || []).length ? <i style={{ background: 'var(--share)' }} title="shared context attached" /> : null}</Dots>
         {src?.b === b.id ? <span className="srctag">source</span> : <Pills b={b} />}
       </div>);
       if (folded) hideAt = b.level;
     } else {
-      rows.push(<div key={b.id} className={'wrow wp' + (src?.b === b.id ? ' is-src' : '')} style={{ paddingLeft: hl * 14 + 4 }} data-bid={b.id}>
+      rows.push(<div key={b.id} className={'wrow wp' + (src?.b === b.id ? ' is-src' : '')} style={{ paddingLeft: dep[b.id] * 14 + 4 }} data-bid={b.id}>
         <Dots types={types(b.id)} />
         <Avatar u={b.editor || b.author} />
         <span className="wtext" onClick={e => {

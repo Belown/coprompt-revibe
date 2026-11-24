@@ -11,7 +11,7 @@ import { ordered, text, label, members } from './lib/model.js';
 import { T } from './lib/templates.js';
 import { mech, setSource, commitCode, checkShares, unlinkAt } from './lib/mechanisms.js';
 import { generate, promptFromCode } from './lib/codegen.js';
-import { addBlock, moveBlock, setPromptText } from './lib/blocks.js';
+import { addBlock, moveBlock, setPromptText, indent } from './lib/blocks.js';
 import { run, pyRun } from './lib/python.js';
 import { commitPrompt, jump } from './lib/promptDom.js';
 import { toast, onModalClosed, isModalOpen } from './lib/ui.js';
@@ -21,7 +21,7 @@ const useStore = () => useSyncExternalStore(subscribe, getVersion);
 
 // test hook for e2e.mjs (drives the app through the same functions the UI calls)
 window.cp = { get S() { return S; }, ui, put, ordered, text, label, members, T, mech, setSource, commitCode, generate, promptFromCode,
-  addBlock, moveBlock, setPromptText, run, pyRun, commitPrompt, jump };
+  addBlock, moveBlock, setPromptText, indent, run, pyRun, commitPrompt, jump };
 
 onModalClosed(checkShares);
 

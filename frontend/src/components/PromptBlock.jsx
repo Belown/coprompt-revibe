@@ -31,7 +31,7 @@ function Output({ o }) {
   return <div className="out">{o && <>{o.text}{o.err && <span className="err">{o.err}</span>}{o.img && <img alt="plot output" src={'data:image/png;base64,' + o.img} />}</>}</div>;
 }
 
-export default function PromptBlock({ b, dnd }) {
+export default function PromptBlock({ b, dnd, rail }) {
   const id = b.id, ref = useRef(null), [panel, setPanel] = useState(null), [armed, arm] = useState(false);
   const others = Object.entries(ui.PRES).filter(([u, x]) => x === id && u !== ME).map(([u]) => u);
   const last = b.hist?.at(-1), isNew = unseen(b), busy = ui.BUSY[id], hasCode = !!b.code.trim();
@@ -48,7 +48,7 @@ export default function PromptBlock({ b, dnd }) {
   const toggle = k => setPanel(p => p === k ? null : k);
   const cls = ['block', 'pb', others.length && 'here', ui.SOURCE?.b === id && !ui.SOURCE.n && 'is-src', isNew && 'unseen',
     dnd.dragging === id && 'dragging', dnd.drop?.id === id && (dnd.drop.after ? 'drop-after' : 'drop-before')].filter(Boolean).join(' ');
-  return <div ref={ref} className={cls} data-id={id} style={{ '--who': ucol(others[0]) }}
+  return <div ref={ref} className={cls} data-id={id} style={{ '--who': ucol(others[0]), ...rail }}
     draggable={armed} onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); dnd.start(id); }}
     onDragEnd={() => { arm(false); dnd.end(); }} onClick={() => markSeen(id)} onFocus={() => markSeen(id)}>
     <span className="newtag" title="Changed by someone else or automatically. Click the block to dismiss.">

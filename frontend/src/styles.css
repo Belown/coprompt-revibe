@@ -88,18 +88,23 @@ aside{position:sticky;top:90px;display:flex;flex-direction:column;height:calc(10
 .block.drop-before{box-shadow:0 -3px 0 0 var(--accent)}
 .block.drop-after{box-shadow:0 3px 0 0 var(--accent)}
 
-/* headings */
-.hb{background:none;border:none;box-shadow:none;padding:20px 0 0;display:flex;align-items:center;gap:10px}
-.hb[data-l="1"]{padding-top:4px}
-.htext{flex:1;outline:none;font-weight:700;letter-spacing:-.015em;border-radius:8px;padding:2px 8px;margin-left:-8px;text-wrap:balance}
+/* outline: one step in per enclosing heading; a rail per enclosing section, lit (--on) for the section a heading covers */
+#editor{--ind:28px}
+#editor>.block{margin-left:calc(var(--d,0) * var(--ind))}
+#editor>.block::before,#editor>.block::after{content:"";position:absolute;top:-7px;bottom:-7px;pointer-events:none}
+#editor>.block::before{right:100%;width:calc(var(--d,0) * var(--ind));
+  background:repeating-linear-gradient(90deg,transparent 0 9px,var(--line-2) 9px 10px,transparent 10px var(--ind))}
+#editor>.block::after{left:calc((var(--hd,0) - var(--d,0)) * var(--ind) + 8px);width:3px;border-radius:2px;background:var(--accent);
+  opacity:var(--on,0);transition:opacity .15s}
+
+/* headings: size by depth, not by level number */
+.hb{background:none;border-color:transparent;box-shadow:none;padding:20px 0 0;display:flex;align-items:center;gap:10px}
+.hb[data-d="0"]{padding-top:4px}
+.htext{flex:1;outline:none;font-size:17px;line-height:1.35;font-weight:600;letter-spacing:-.005em;border-radius:8px;padding:2px 8px;margin-left:-8px;text-wrap:balance}
 .htext:hover{background:var(--hover)}
 .htext:focus{background:var(--surface);box-shadow:0 0 0 1px var(--line-2)}
-.hb[data-l="1"] .htext{font-size:30px;line-height:1.2;letter-spacing:-.025em}
-.hb[data-l="2"] .htext{font-size:22px;line-height:1.25}
-.hb[data-l="3"] .htext{font-size:17px;line-height:1.35;font-weight:600;letter-spacing:-.005em}
-.lvl{flex:none;min-width:30px;padding:4px 5px;font:600 11px/1 var(--mono);text-align:center;color:var(--mut);cursor:pointer;
-  border:1px solid var(--line);border-radius:6px;background:var(--surface)}
-.lvl:hover{color:var(--ink);border-color:var(--line-2)}
+.hb[data-d="0"] .htext{font-size:30px;line-height:1.2;font-weight:700;letter-spacing:-.025em}
+.hb[data-d="1"] .htext{font-size:22px;line-height:1.25;font-weight:700;letter-spacing:-.015em}
 
 /* prompt blocks */
 .phead{display:flex;align-items:center;gap:10px}
@@ -203,7 +208,6 @@ i[data-unlink]{cursor:pointer;box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px va
 #wiki.picking .wrow:hover{background:var(--accent-soft)}
 .wh{font-weight:600}
 .wp{color:var(--ink-2)}
-.wh .hl{width:20px;font:600 10.5px/1 var(--mono);color:var(--mut)}
 .wrow .av{width:22px;height:22px;font-size:11px}
 .fold{display:inline-grid;place-items:center;width:20px;height:20px;color:var(--mut);cursor:pointer;border-radius:5px}
 .fold:hover{background:var(--line);color:var(--ink)}
@@ -275,7 +279,8 @@ i[data-unlink]{cursor:pointer;box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px va
   .pane-b{max-height:60vh}
   .hb .ctl{display:none}
   .hb:focus-within .ctl{display:inline-flex}
-  .hb[data-l="1"] .htext{font-size:25px}
+  .hb[data-d="0"] .htext{font-size:25px}
+  #editor{--ind:16px}
   .busy:not(:empty){margin-left:0}
   .ctl{opacity:1}
   .runbar{flex-wrap:wrap}

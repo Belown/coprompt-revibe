@@ -20,12 +20,22 @@ export function ancestors(id) { // headings enclosing a block
   }
   return [];
 }
+export function section(hid) { // every block under a heading, up to the next heading at its level or above
+  const b = S.blocks[hid], list = ordered(), out = [];
+  for (const x of list.slice(list.findIndex(x => x.id === hid) + 1)) { if (x.kind === 'h' && x.level <= b.level) break; out.push(x); }
+  return out;
+}
+export function depths() { // how many headings enclose each block; levels may skip numbers, depth never does
+  const st = [], d = {};
+  for (const b of ordered()) {
+    if (b.kind === 'h') { while (st.length && st.at(-1) >= b.level) st.pop(); d[b.id] = st.length; st.push(b.level); }
+    else d[b.id] = st.length;
+  }
+  return d;
+}
 export function members(bid) { // prompt blocks a reference covers: the prompt itself, or every prompt in a heading's section
   const b = S.blocks[bid]; if (!b || b.del) return [];
-  if (b.kind === 'p') return [bid];
-  const list = ordered(), out = [];
-  for (const x of list.slice(list.findIndex(x => x.id === bid) + 1)) { if (x.kind === 'h' && x.level <= b.level) break; if (x.kind === 'p') out.push(x.id); }
-  return out;
+  return b.kind === 'p' ? [bid] : section(bid).filter(x => x.kind === 'p').map(x => x.id);
 }
 export const inScope = (ref, id) => members(ref.b).includes(id);
 export function provider(bid) { // what a collaborator's prompt (or whole section) offers as context
