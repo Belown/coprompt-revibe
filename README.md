@@ -1,6 +1,6 @@
 # CoPrompt revibe
 
-An unofficial reimplementation of **CoPrompt** (Feng, Yen et al., CHI '24): a notebook where several people program together in natural language, building on each other's prompts. It was rebuilt from the paper alone and is not affiliated with the paper's authors.
+An unofficial reimplementation of **CoPrompt** (Feng, Yen et al., CHI '24): a notebook where several people program together in natural language, building on each other's prompts. It was rebuilt from the paper alone, inspired by the UIST 2026 Revibe workshop, and is not affiliated with the paper's authors.
 
 **Try it:** <https://coprompt-revibe.wangleishen.com/app/>. Pick a name and a session, then share the invite link.
 
