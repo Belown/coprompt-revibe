@@ -1,11 +1,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// base './' keeps every URL relative, so the build works from any folder (GitHub Pages project sites included).
-// Port 8000 for dev and preview: it is the local origin the sync backend allows by default (ALLOWED_ORIGINS).
+// Two pages: the blog at / (index.html) and the app at /app/ (app/index.html).
+// base './' keeps every URL relative. Port 8000 for dev and preview: the local origin the backend allows by default.
 export default defineConfig({
   base: './',
   plugins: [react()],
+  build: { rollupOptions: { input: { blog: 'index.html', app: 'app/index.html' } } },
   server: { port: 8000, strictPort: true },
   preview: { port: 8000, strictPort: true },
 });

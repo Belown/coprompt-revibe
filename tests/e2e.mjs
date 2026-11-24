@@ -1,9 +1,9 @@
 // Two-window end-to-end check of the CoPrompt revibe via CDP (LLM stubbed).
-// Usage (in frontend/): npm run build && npm run preview   (serves frontend/dist on :8000), then: npm run e2e
-// E2E_BASE overrides the URL, e.g. E2E_BASE=http://localhost:8000/dist/ when a static server runs in frontend/.
+// Usage (in frontend/): npm run build && npm run preview   (serves frontend/dist on :8000; the app is at /app/), then: npm run e2e
+// E2E_BASE overrides the URL, e.g. E2E_BASE=http://localhost:8080/app/ against the docker compose stack.
 import { spawn } from 'node:child_process';
 const EDGE = process.env.E2E_BROWSER || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
-const BASE = process.env.E2E_BASE || 'http://localhost:8000/';
+const BASE = process.env.E2E_BASE || 'http://localhost:8000/app/';
 const ROOM = '&room=e2e' + Date.now(); // a fresh notebook per run (also on the sync backend, when one is running)
 const proc = spawn(EDGE, ['--headless=new', '--disable-gpu', '--remote-debugging-port=9333',
   `--user-data-dir=${process.env.TEMP || '/tmp'}/cp_e2e_${Date.now()}`, 'about:blank'], { stdio: 'ignore' });

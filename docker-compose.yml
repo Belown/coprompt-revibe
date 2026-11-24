@@ -1,14 +1,21 @@
-# Sync backend only (the frontend is static, on GitHub Pages).
-#   cp backend/.env.example backend/.env   # then edit
-#   docker compose --env-file backend/.env up -d --build
+# Everything for coprompt-revibe.wangleishen.com: Caddy serves the built frontend and proxies /api to the backend.
+#   cp .env.example .env   # then edit
+#   docker compose up -d --build
 services:
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${HTTP_PORT:?set HTTP_PORT in .env}:80"
+    depends_on:
+      - sync
+
   sync:
     build: ./backend
     restart: unless-stopped
-    env_file: ./backend/.env
+    env_file: .env
     environment:
+      PORT: 8787        # Caddyfile proxies to sync:8787
       DATA_DIR: /data
-    ports:
-      - "127.0.0.1:${PORT:?set PORT in backend/.env and pass --env-file backend/.env}:${PORT}"
     volumes:
-      - "${HOST_DATA_DIR:?set HOST_DATA_DIR in backend/.env and pass --env-file backend/.env}:/data"
+      - "${HOST_DATA_DIR:?set HOST_DATA_DIR in .env}:/data"

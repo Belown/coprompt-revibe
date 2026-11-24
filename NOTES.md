@@ -8,25 +8,34 @@ Two parts: `frontend/` (React + Vite, static) and `backend/` (Node + `ws`, the s
 
 ```
 cd backend  && npm install && npm start     # sync server on :8787, rooms saved in backend/data/
-cd frontend && npm install && npm run dev   # http://localhost:8000
+cd frontend && npm install && npm run dev   # blog at http://localhost:8000/, app at http://localhost:8000/app/
 ```
 
-1. Open `http://localhost:8000`, enter a name and a session (room) name, and start. **Invite** copies a link to the session; whoever opens it picks a name and joins the same notebook, from any browser or device. **New session** opens a fresh notebook in a new tab. Rooms are independent. The scenario is written for Alice and Bob, but any number of people can join a room.
+1. Open `http://localhost:8000/app/`, enter a name and a session (room) name, and start. **Invite** copies a link to the session; whoever opens it picks a name and joins the same notebook, from any browser or device. **New session** opens a fresh notebook in a new tab. Rooms are independent. The scenario is written for Alice and Bob, but any number of people can join a room.
 2. Click **API key** and paste a DeepSeek key. It is stored in this browser's localStorage only and never goes through the sync server. The default model is `deepseek-flash` (thinking disabled, for speed). In the same dialog you can switch to `deepseek-v4-pro`, or enter any `claude-…` model name together with an Anthropic key.
 3. The first load fetches Pyodide, pandas, sklearn and matplotlib from the CDN, which takes about 20–40 s. Wait until the header says "Python: ready".
 4. **Reset demo** restores the scenario for everyone in the room.
 
 The header shows the connection: **Connected** (through the server), **Reconnecting…** (edits are kept and sent once it is back), or **Local mode**.
 
-**With and without the backend.** With it, everyone in a room syncs across browsers and devices, and the room survives reloads and server restarts. Without it (the backend is unreachable on the first connect, or the URL has `?local=1`), the app falls back to the old mode: `BroadcastChannel` + localStorage, so only windows of *one* browser sync (**Open as Bob** gives you the second window). URL parameters: `?user=`, `?room=`, `?local=1`, and `?server=wss://…` (overrides the backend for one session). The backend address is set in `frontend/src/config.js`.
+**With and without the backend.** With it, everyone in a room syncs across browsers and devices, and the room survives reloads and server restarts. Without it (the backend is unreachable on the first connect, or the URL has `?local=1`), the app falls back to the old mode: `BroadcastChannel` + localStorage, so only windows of *one* browser sync (**Open as Bob** gives you the second window). URL parameters: `?user=`, `?room=`, `?local=1`, and `?server=wss://…` (overrides the backend for one session). The backend address is set in `frontend/src/config.js`: deployed, it is the same origin under `/api`; on localhost, `ws://localhost:8787`.
 
 The page needs an internet connection, for the CDN and the API.
 
 ## Deploy
 
-- **Frontend → GitHub Pages.** `.github/workflows/pages.yml` builds `frontend/` and publishes `frontend/dist` on every push to `main` that touches `frontend/`. Set **Settings → Pages → Source** to **GitHub Actions**, and **Custom domain** to `app.coprompt-revibe.wangleishen.com` (the build also ships `frontend/public/CNAME`). The site talks to `wss://api.coprompt-revibe.wangleishen.com`.
-- **Backend → any Docker host.** `cp backend/.env.example backend/.env`, edit it (every variable is explained there), then `docker compose --env-file backend/.env up -d --build`. The port is bound to `127.0.0.1` only, so a reverse proxy or tunnel must terminate TLS for `api.coprompt-revibe.wangleishen.com` and forward WebSocket upgrades. Room data is one JSON file per room in `HOST_DATA_DIR`. On SIGTERM the server writes every room before it exits. `GET /health` returns `{ok, rooms, clients}`.
-- **Domains.** `app.coprompt-revibe.wangleishen.com` is the frontend (GitHub Pages) and `api.coprompt-revibe.wangleishen.com` the backend; `coprompt-revibe.wangleishen.com` itself is kept for the blog. Both are two levels below `wangleishen.com`, and Cloudflare's free Universal SSL certificate only covers one level (`*.wangleishen.com`). So the `app` record must stay **DNS only** (GitHub issues its own certificate), and `api` needs either DNS only with a certificate on the server (e.g. Caddy + Let's Encrypt), or Cloudflare Advanced Certificate Manager if it is proxied or tunnelled.
+Everything runs on one server, under one domain, from `docker-compose.yml`:
+
+```
+coprompt-revibe.wangleishen.com/        blog          frontend/index.html
+coprompt-revibe.wangleishen.com/app/    the app       frontend/app/index.html
+coprompt-revibe.wangleishen.com/api/    sync backend  WebSocket at /api/?room=…, health at /api/health
+```
+
+- **Two containers.** `web` (`frontend/Dockerfile`) builds the frontend and serves `dist/` with Caddy, which also proxies `/api/*` to `sync` (`backend/Dockerfile`), with the prefix stripped. Only `web` is published, on `127.0.0.1:${HTTP_PORT}`, in plain HTTP. Cloudflare Tunnel or the host's reverse proxy terminates TLS and forwards to it (WebSocket upgrades included).
+- **Deploy:** `cp .env.example .env`, edit it (every variable is explained there), then `docker compose up -d --build`. **Update:** `git pull && docker compose up -d --build`. There is no automatic deploy on push.
+- **Data:** one JSON file per room in `HOST_DATA_DIR`. On SIGTERM the server writes every room before it exits. `/api/health` returns `{ok, rooms, clients}`.
+- **Domain and TLS.** `coprompt-revibe.wangleishen.com` is one level below `wangleishen.com`, so Cloudflare's free Universal SSL certificate covers it when the record is proxied or tunnelled. Because the backend is same-origin, there is no separate API domain, and `ALLOWED_ORIGINS` only needs this domain (plus `http://localhost:8000` for development).
 - **Never commit an API key or `.env`.** Each viewer pastes their own key in **API key**, and it is sent only to the provider. DeepSeek and Anthropic both accept browser calls.
 - The sync server has no authentication: anyone who knows a room name and opens the page from an allowed origin can edit that room. Use unguessable room names (the default is random) for anything private.
 
@@ -47,8 +56,13 @@ The page needs an internet connection, for the CDN and the API.
 backend/
   server.js                WebSocket sync server: rooms, LWW, persistence, limits, /health
   smoke-test.mjs           npm test: protocol checks against a real server
-  Dockerfile, .env.example
-docker-compose.yml         backend only
+  Dockerfile
+frontend/
+  index.html               the blog (placeholder)
+  app/index.html           the app page
+  public/app/data/         titanic.csv, served at /app/data/
+  Dockerfile, Caddyfile    the web container: built frontend + /api proxy
+docker-compose.yml, .env.example   web + sync, for the server
 tests/e2e.mjs              two-window headless test (run from frontend/: npm run e2e)
 frontend/src/
   config.js                backend URL, ?room=, ?local=
