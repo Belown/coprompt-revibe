@@ -1,3 +1,5 @@
 architecture.visual-check.*
 node_modules/
 dist/
+.env
+backend/data/
