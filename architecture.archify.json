@@ -203,7 +203,7 @@
   "boundaries": [
     {
       "kind": "region",
-      "label": "Alice's window · index.html (vanilla JS, no build)",
+      "label": "Alice's window · React app (Vite build)",
       "wraps": [
         "editor",
         "wiki",
@@ -296,7 +296,7 @@
       "dot": "cyan",
       "title": "Static, no backend",
       "items": [
-        "One index.html served as-is",
+        "One static Vite build (dist/)",
         "Same files on localhost or GitHub Pages"
       ]
     },
