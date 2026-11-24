@@ -266,6 +266,11 @@ i[data-unlink]{cursor:pointer;box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px va
 @keyframes fade{from{opacity:0}}
 @keyframes rise{from{opacity:0;transform:translateY(6px)}}
 @keyframes pop{from{opacity:0;transform:translateY(4px) scale(.96)}}
+/* ---------- live cursors ---------- */
+#cursors[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+.cursor{position:fixed;left:0;top:0;z-index:9;margin:-3px 0 0 -3px;pointer-events:none;display:flex;align-items:flex-start;transition:transform .1s linear}
+.cursor svg{width:18px;height:18px;fill:var(--who);stroke:#fff;stroke-width:1.5;stroke-linejoin:round;filter:drop-shadow(0 1px 1px rgba(28,28,31,.25))}
+.cursor span{margin:14px 0 0 -4px;padding:1px 7px;border-radius:999px;background:var(--who);color:#fff;font-size:12px;font-weight:500;line-height:1.5;white-space:nowrap}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 
 /* ---------- smaller screens ---------- */

@@ -1,6 +1,6 @@
 // Transports for the shared notebook. Both speak the same messages (see backend/server.js):
-//   send: hello{seed} put{kind,obj,epoch} presence{b} busy{id,label} reset{S}
-//   receive: snapshot{S,epoch} put{kind,obj} presence{user,b} busy{id,label,user} reset{S,epoch}
+//   send: hello{seed} put{kind,obj,epoch} presence{b} cursor{c} busy{id,label} reset{S}
+//   receive: snapshot{S,epoch} put{kind,obj} presence{user,b} cursor{user,c} busy{id,label,user} reset{S,epoch}
 // connect(onMsg, onStatus) returns {send}; onStatus gets 'connected' | 'reconnecting' | 'local'.
 import { SERVER, ROOM } from '../config.js';
 import { ME } from './util.js';

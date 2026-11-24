@@ -5,7 +5,8 @@ import Wiki from './components/Wiki.jsx';
 import Messages from './components/Messages.jsx';
 import { Modal, Toasts, MakeNode } from './components/Overlays.jsx';
 import { subscribe, getVersion, emit } from './lib/bus.js';
-import { S, ui, put, presence, unseen } from './lib/store.js';
+import Cursors from './components/Cursors.jsx';
+import { S, ui, put, presence, unseen, sendCursor } from './lib/store.js';
 import { ME } from './lib/util.js';
 import { ordered, text, label, members } from './lib/model.js';
 import { T } from './lib/templates.js';
@@ -37,7 +38,7 @@ export default function App() {
       const host = d.closest('[data-id],[data-bid]');
       unlinkAt(host.dataset.id || host.dataset.bid, d.closest('.node')?.dataset.n);
     };
-    const onLeave = () => presence(null);
+    const onLeave = () => { presence(null); if (ui.cursors) sendCursor(null); };
     document.addEventListener('keydown', onKey);
     document.addEventListener('click', onUnlink, true);
     window.addEventListener('beforeunload', onLeave);
@@ -51,6 +52,7 @@ export default function App() {
       <Editor />
       <aside><Wiki /><Messages /></aside>
     </main>
+    <Cursors />
     <MakeNode />
     <Modal />
     <Toasts />

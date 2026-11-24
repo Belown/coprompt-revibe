@@ -20,6 +20,7 @@ export const ui = {
   py: { text: 'Python: loading…', s: 'load' },
   conn: 'connecting', // connected | reconnecting | local
   focus: null,    // {id, part} to focus once the block is mounted
+  cursors: localStorage.getItem('cp_cursors') === '1', // live cursors: off until this user turns them on
 };
 export const setUI = patch => { Object.assign(ui, patch); emit(); };
 
@@ -57,6 +58,7 @@ const plain = b => b.kind === 'h' ? b.text : b.segs.map(s => s.v).join('');
 function onMsg(d) {
   if (d.t === 'snapshot') return snapshot(d);
   if (d.t === 'presence') { ui.PRES[d.user] = d.b; return emit(); }
+  if (d.t === 'cursor') { ui.cursors && d.c ? CUR[d.user] = d.c : delete CUR[d.user]; return cursorsChanged(); }
   if (d.t === 'busy') { d.label ? ui.BUSY[d.id] = `${d.label} (${d.user})` : delete ui.BUSY[d.id]; return emit(); }
   if (d.t === 'reset') { epoch = d.epoch; return hardReset(d.S); }
   if (d.t !== 'put' || !S) return;
@@ -75,6 +77,20 @@ export function busy(id, label) {
   T.send({ t: 'busy', id, label, user: ME }); emit();
 }
 export const presence = id => T.send({ t: 'presence', user: ME, b: id });
+
+// Live mouse pointers (components/Cursors.jsx). Their own change counter, so ten moves a second from each
+// collaborator never re-render the notebook.
+export const CUR = {}; // user -> {b, x, y}: the block under the pointer and the position in it, as fractions of its box
+const curSubs = new Set(); let curV = 0;
+export const onCursors = f => { curSubs.add(f); return () => curSubs.delete(f); };
+export const cursorsVersion = () => curV;
+const cursorsChanged = () => { curV++; curSubs.forEach(f => f()); };
+export const sendCursor = c => T.send({ t: 'cursor', user: ME, c });
+export function setCursors(on) { // one switch: off means neither showing others' pointers nor sending mine
+  ui.cursors = on; localStorage.setItem('cp_cursors', on ? '1' : '');
+  if (!on) { for (const u in CUR) delete CUR[u]; cursorsChanged(); }
+  emit();
+}
 
 // Connect. The room's owner (backend, or localStorage in local mode) decides whether our seed is used.
 const status = s => { ui.conn = s; emit(); if (s !== 'reconnecting') T.send({ t: 'hello', seed: seed() }); };

@@ -214,6 +214,15 @@ try {
   check(await A.ev(`(async()=>{ const id = byText('drop columns').id; el(id).querySelector('[aria-label=History]').click(); await until(() => el(id).querySelector('.hrow')); el(id).querySelector('.hrow').click(); return until(() => el(id).querySelector('.dcode')); })()`), 'history diff renders');
   check(await A.ev(`document.querySelectorAll('#wiki .dots i').length > 0 && document.querySelectorAll('#msgs .msg').length >= 6`), 'wiki dots + message panel populated');
 
+  // live cursors: opt-in on both sides; Alice's pointer over a block shows in Bob's window, and goes when she turns it off
+  check(await B.ev(`!document.querySelector('.cursor')`), 'no live cursors until turned on');
+  for (const P of [A, B]) await P.ev(`document.querySelector('#cursors').click(); 1`);
+  await A.ev(`(async()=>{ await until(() => document.querySelector('#cursors').getAttribute('aria-pressed') === 'true'); const r = el('${encId}').getBoundingClientRect();
+    el('${encId}').dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: r.left + 20, clientY: r.top + 10 })); return 1; })()`);
+  check(await B.ev(`until(() => document.querySelector('.cursor span')?.textContent === 'Alice')`), 'Alice’s live cursor shows in Bob’s window');
+  await A.ev(`document.querySelector('#cursors').click(); 1`);
+  check(await B.ev(`until(() => !document.querySelector('.cursor'))`), 'turning live cursors off removes the pointer for others');
+
   // 10. asynchronous case: Bob closes his window, Alice changes his block, Bob comes back → highlighted + notice
   await B.kill(); await sleep(500);
   await A.ev(`(async()=>{ const b = S.blocks['${b2}']; await commitCode('${b2}', b.code + '\\nprint(1)', 'edit code'); return 1; })()`);

@@ -77,6 +77,12 @@ function onMessage(ws, m, size) {
     case 'presence':
       ws.b = typeof m.b === 'string' && NAME.test(m.b) ? m.b : null; // a block id
       return others(ws, { t: 'presence', user: ws.user, b: ws.b });
+    case 'cursor': { // a live mouse pointer: block id + position in it as fractions; not stored, not replayed
+      const c = m.c, ok = c && typeof c === 'object' && typeof c.b === 'string' && NAME.test(c.b)
+        && [c.x, c.y].every(v => Number.isFinite(v) && v >= 0 && v <= 1);
+      ws.cur = true;
+      return others(ws, { t: 'cursor', user: ws.user, c: ok ? { b: c.b, x: c.x, y: c.y } : null });
+    }
     case 'busy': {
       if (typeof m.id !== 'string' || !NAME.test(m.id)) return;
       const label = typeof m.label === 'string' ? m.label.slice(0, 100) : null;
@@ -125,6 +131,7 @@ server.on('upgrade', (req, sock, head) => {
       room.clients.delete(ws);
       if (ws.b) others(ws, { t: 'presence', user: ws.user, b: null }); // no ghost "✎ Bob" after a dropped connection
       for (const id of Object.keys(ws.busy)) others(ws, { t: 'busy', id, label: null, user: ws.user });
+      if (ws.cur) others(ws, { t: 'cursor', user: ws.user, c: null });
       if (!room.clients.size) { flush(room); rooms.delete(room.name); }
     });
   });
