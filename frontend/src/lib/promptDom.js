@@ -1,11 +1,11 @@
-// The prompt editor is a contenteditable whose nodes are atomic chips. React does not own its children:
-// PromptInput fills and parses the DOM here, so remote updates never fight the person typing.
-import { S, ui, put } from './store.js';
-import { ME, MECH } from './util.js';
+// Node chips (the atomic source/target nodes inside a prompt) and the flash / jump motion.
+// The prompt editor itself is TipTap on Y.js (components/PromptInput.jsx); a chip is its 'promptNode' node view.
+import { ui } from './store.js';
+import { MECH } from './util.js';
 import { actsOn } from './model.js';
 
-export const DIRTY = new Set(); // blocks with local typing not yet committed
-export const TYPED = new Set(); // blocks typed into since focus (for prompt-only history versions)
+export const DIRTY = new Set(); // headings with local typing not yet committed
+export const TYPED = new Set(); // prompts typed into since focus (for prompt-only history versions)
 
 export function chipEl(s, title = 'Click: use as source node · Double-click: rename') {
   const c = document.createElement('span');
@@ -27,22 +27,7 @@ export function decorateChip(c, bid) {
   c.style.borderColor = types.length ? MECH[types[0]].c : '';
   c.classList.toggle('src', ui.SOURCE?.n === c.dataset.n);
 }
-export function fillPrompt(div, b) { div.replaceChildren(...b.segs.map(s => s.t === 'node' ? chipEl(s) : document.createTextNode(s.v))); }
-export function parsePrompt(div) {
-  const segs = [];
-  for (const n of div.childNodes) {
-    if (n.dataset?.n) segs.push({ t: 'node', id: n.dataset.n, v: n.dataset.v });
-    else { const v = n.textContent; if (segs.at(-1)?.t === 'text') segs.at(-1).v += v; else segs.push({ t: 'text', v }); }
-  }
-  return segs.filter(s => s.t === 'node' || s.v);
-}
 export function caretToEnd(el) { const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
-export const promptEl = id => document.querySelector(`[data-id="${id}"] .prompt`);
-export function commitPrompt(id) {
-  DIRTY.delete(id);
-  const b = S.blocks[id], el = promptEl(id); if (!b || !el) return;
-  b.segs = parsePrompt(el); b.editor = ME; put('blocks', b);
-}
 
 // motion through the Web Animations API, so React re-rendering className never cuts an animation short
 const EASE = 'cubic-bezier(.16,1,.3,1)';

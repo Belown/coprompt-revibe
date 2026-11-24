@@ -1,7 +1,10 @@
 // Shared notebook state, synced through a transport (lib/sync.js): the backend, or BroadcastChannel in local mode.
 // ponytail: per-object last-writer-wins, no CRDT; concurrent typing in one prompt is not merged.
+import * as Y from 'yjs';
+import { applyAwarenessUpdate, encodeAwarenessUpdate, removeAwarenessStates } from 'y-protocols/awareness';
 import { emit } from './bus.js';
-import { uid, ME } from './util.js';
+import { uid, ME, debounce } from './util.js';
+import { ydoc, awareness, b64, unb64, segs } from './ytext.js';
 import { toast } from './ui.js';
 import { local, ws } from './sync.js';
 import { LOCAL, ROOM } from '../config.js';
@@ -47,16 +50,27 @@ export function put(kind, obj) {
 // First snapshot: load. Later ones (after a reconnect): same epoch → keep and resend what this window changed while
 // disconnected; new epoch → the notebook was reset meanwhile, take it as is.
 function snapshot(d) {
+  if (d.y) Y.applyUpdate(ydoc, unb64(d.y), 'remote');
   const old = S, same = old && d.epoch === epoch;
+  if (same) yq.push(Y.encodeStateAsUpdate(ydoc)); // typing done while disconnected (the server ignores what it has)
+  awDirty = true; ySoon();
   S = d.S; epoch = d.epoch;
   if (same) for (const kind of ['blocks', 'actions']) for (const o of Object.values(old[kind]))
     if (!(S[kind][o.id]?.upd >= o.upd)) { S[kind][o.id] = o; T.send({ t: 'put', kind, obj: o, epoch }); }
   if (!SEEN || (old && !same)) { initSeen(); ui.SOURCE = ui.TGTNODE = null; }
   resolveReady(); emit();
 }
-const plain = b => b.kind === 'h' ? b.text : b.segs.map(s => s.v).join('');
+const plain = b => b.kind === 'h' ? b.text : segs(b.id).map(s => s.v).join('');
 function onMsg(d) {
   if (d.t === 'snapshot') return snapshot(d);
+  if (d.t === 'y') {
+    try {
+      if (d.u) Y.applyUpdate(ydoc, unb64(d.u), 'remote');
+      if (d.aw) applyAwarenessUpdate(awareness, unb64(d.aw), 'remote');
+      if (d.gone != null) removeAwarenessStates(awareness, [d.gone], 'remote');
+    } catch (e) { console.warn('bad Y.js message', e); }
+    return;
+  }
   if (d.t === 'presence') { ui.PRES[d.user] = d.b; return emit(); }
   if (d.t === 'cursor') { ui.cursors && d.c ? CUR[d.user] = d.c : delete CUR[d.user]; return cursorsChanged(); }
   if (d.t === 'busy') { d.label ? ui.BUSY[d.id] = `${d.label} (${d.user})` : delete ui.BUSY[d.id]; return emit(); }
@@ -66,7 +80,7 @@ function onMsg(d) {
   if (cur && cur.upd > d.obj.upd) return;
   S[d.kind][d.obj.id] = d.obj; emit();
   if (d.kind === 'actions' && !cur && d.obj.owner === ME && d.obj.by !== ME) {
-    const t = S.blocks[d.obj.tgt.b], seg = d.obj.tgt.n && t?.segs?.find(s => s.id === d.obj.tgt.n);
+    const t = S.blocks[d.obj.tgt.b], seg = d.obj.tgt.n && t?.kind === 'p' && segs(t.id).find(s => s.id === d.obj.tgt.n);
     toast(`${d.obj.by} created a ${d.obj.type} on your ${t?.kind === 'h' ? 'task' : 'prompt'} “${seg ? seg.v : t ? plain(t) : '?'}”`);
   }
   const note = d.kind === 'blocks' && (d.obj.notes?.length || 0) > (cur?.notes?.length || 0) && d.obj.notes.at(-1);
@@ -77,6 +91,22 @@ export function busy(id, label) {
   T.send({ t: 'busy', id, label, user: ME }); emit();
 }
 export const presence = id => T.send({ t: 'presence', user: ME, b: id });
+
+// Prompt text (Y.js, lib/ytext.js). This window's changes go out at most every 100 ms, merged into one update,
+// together with its text cursor; a remote change re-renders the app (wiki, labels) shortly after.
+let yq = [], awDirty = false, yTimer = null;
+export function yFlush() {
+  clearTimeout(yTimer); yTimer = null;
+  if (!T || (!yq.length && !awDirty)) return;
+  const m = { t: 'y', id: ydoc.clientID };
+  if (yq.length) m.u = b64(Y.mergeUpdates(yq));
+  if (awDirty) m.aw = b64(encodeAwarenessUpdate(awareness, [ydoc.clientID]));
+  yq = []; awDirty = false; T.send(m);
+}
+const ySoon = () => { yTimer ??= setTimeout(yFlush, 100); };
+const emitSoon = debounce(emit, 100);
+ydoc.on('update', (u, origin) => { if (origin !== 'remote') { yq.push(u); ySoon(); } emitSoon(); });
+awareness.on('update', (_, origin) => { if (origin !== 'remote') { awDirty = true; ySoon(); } });
 
 // Live mouse pointers (components/Cursors.jsx). Their own change counter, so ten moves a second from each
 // collaborator never re-render the notebook.

@@ -3,10 +3,12 @@ import Header from './components/Header.jsx';
 import Editor from './components/Editor.jsx';
 import Wiki from './components/Wiki.jsx';
 import Messages from './components/Messages.jsx';
-import { Modal, Toasts, MakeNode } from './components/Overlays.jsx';
+import { Modal, Toasts } from './components/Overlays.jsx';
+import { nodeFromWord, editorOf } from './components/PromptInput.jsx';
 import { subscribe, getVersion, emit } from './lib/bus.js';
 import Cursors from './components/Cursors.jsx';
-import { S, ui, put, presence, unseen, sendCursor } from './lib/store.js';
+import { S, ui, put, presence, unseen, sendCursor, yFlush } from './lib/store.js';
+import { segs, awareness } from './lib/ytext.js';
 import { ME } from './lib/util.js';
 import { ordered, text, label, members } from './lib/model.js';
 import { T } from './lib/templates.js';
@@ -14,7 +16,7 @@ import { mech, setSource, commitCode, checkShares, unlinkAt } from './lib/mechan
 import { generate, promptFromCode } from './lib/codegen.js';
 import { addBlock, moveBlock, setPromptText, indent } from './lib/blocks.js';
 import { run, pyRun } from './lib/python.js';
-import { commitPrompt, jump } from './lib/promptDom.js';
+import { jump } from './lib/promptDom.js';
 import { toast, onModalClosed, isModalOpen } from './lib/ui.js';
 
 // the whole app re-renders on every change; library modules hold the state (see lib/bus.js)
@@ -22,7 +24,7 @@ const useStore = () => useSyncExternalStore(subscribe, getVersion);
 
 // test hook for e2e.mjs (drives the app through the same functions the UI calls)
 window.cp = { get S() { return S; }, ui, put, ordered, text, label, members, T, mech, setSource, commitCode, generate, promptFromCode,
-  addBlock, moveBlock, setPromptText, indent, run, pyRun, commitPrompt, jump };
+  addBlock, moveBlock, setPromptText, indent, run, pyRun, jump, segs, nodeFromWord, editorOf, awareness };
 
 onModalClosed(checkShares);
 
@@ -38,7 +40,7 @@ export default function App() {
       const host = d.closest('[data-id],[data-bid]');
       unlinkAt(host.dataset.id || host.dataset.bid, d.closest('.node')?.dataset.n);
     };
-    const onLeave = () => { presence(null); if (ui.cursors) sendCursor(null); };
+    const onLeave = () => { presence(null); if (ui.cursors) sendCursor(null); awareness.setLocalState(null); yFlush(); };
     document.addEventListener('keydown', onKey);
     document.addEventListener('click', onUnlink, true);
     window.addEventListener('beforeunload', onLeave);
@@ -53,7 +55,6 @@ export default function App() {
       <aside><Wiki /><Messages /></aside>
     </main>
     <Cursors />
-    <MakeNode />
     <Modal />
     <Toasts />
   </>;

@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import WebSocket from 'ws';
+import * as Y from 'yjs';
 
 const PORT = 18787, DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-sync-')), ORIGIN = 'http://localhost:8000';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -21,12 +22,22 @@ function client(user, origin = ORIGIN) {
 }
 const seed = tag => ({ blocks: { [tag]: { id: tag, upd: 0 } }, actions: {} });
 
+// a room saved before prompts were Y.js: its text is in the blocks' segs only
+fs.writeFileSync(path.join(DATA_DIR, 'legacy.json'), JSON.stringify({ epoch: 0, S: { blocks: { p1: { id: 'p1', kind: 'p', upd: 1, segs: [{ t: 'text', v: 'old prompt' }] } }, actions: {} } }));
 let srv = await start();
 try {
   const h = await fetch(`http://localhost:${PORT}/health`);
   assert.equal(h.status, 200);
 
   await assert.rejects(client('Eve', 'https://evil.example').open, 'foreign origin is refused');
+  { // legacy room: the server turns its prompts' segs into Y.js text when it opens the room
+    const L = new WebSocket(`ws://localhost:${PORT}/?room=legacy&user=Lee`, { origin: ORIGIN });
+    await new Promise(r => L.on('open', r)); L.send(JSON.stringify({ t: 'hello', seed: seed('l') }));
+    const snap = await new Promise(r => L.on('message', d => { const m = JSON.parse(d); if (m.t === 'snapshot') r(m); }));
+    const d = new Y.Doc(); Y.applyUpdate(d, Buffer.from(snap.y, 'base64'));
+    assert.equal(d.getXmlFragment('p:p1').toString(), '<paragraph>old prompt</paragraph>', 'a legacy room gets its prompt text in Y.js');
+    L.close();
+  }
 
   // LLM proxy guards (nothing here reaches a provider)
   const llm = (path, { origin = ORIGIN, code, body, method = 'POST' } = {}) => fetch(`http://localhost:${PORT}/llm${path}`,
@@ -64,7 +75,23 @@ try {
   A.send({ t: 'cursor', c: { b: 'x', x: 9, y: 0 } });
   assert.equal((await C.next('cursor')).c, null, 'an out-of-range cursor is relayed as hidden');
 
-  A.send({ t: 'reset', S: seed('r') });
+  // prompt text is Y.js: a seed's starting segs are put into the room's doc once, by the server
+  const ytext = (y, id) => { const d = new Y.Doc(); Y.applyUpdate(d, Buffer.from(y, 'base64')); return d.getXmlFragment('p:' + id).toString(); };
+  const docA = new Y.Doc(), upd = []; docA.on('update', u => upd.push(u));
+  docA.getXmlFragment('p:a').insert(0, [new Y.XmlText('hello')]);
+  A.send({ t: 'y', u: Buffer.from(upd[0]).toString('base64'), aw: 'AQ==', id: 7 });
+  const yb = await B.next('y'); // the text update (relayed by the server's doc) and the awareness come separately
+  const yb2 = await B.next('y');
+  assert.equal([yb, yb2].find(m => m.u) && ytext([yb, yb2].find(m => m.u).u, 'a'), 'hello', 'a Y.js update reaches the others');
+  assert.equal([yb, yb2].find(m => m.aw)?.aw, 'AQ==', 'awareness is relayed');
+  const F = client('Finn'); await F.open; F.send({ t: 'hello', seed: seed('f') });
+  assert.equal(ytext((await F.next('snapshot')).y, 'a'), 'hello', 'a late joiner gets the text in the snapshot');
+  assert.equal((await F.next('y')).aw, 'AQ==', "and the others' current awareness");
+  F.ws.close();
+
+  A.send({ t: 'reset', S: { blocks: { r: { id: 'r', upd: 0 }, rp: { id: 'rp', kind: 'p', upd: 0, segs: [{ t: 'text', v: 'load ' }, { t: 'node', id: 'n1', v: 'df' }] } }, actions: {} } });
+  const yr = await B.next('y');
+  assert.equal(ytext(yr.u, 'rp'), '<paragraph>load <promptnode id="n1" v="df"></promptnode></paragraph>', "reset: the server writes the new prompts' text");
   assert.equal((await B.next('reset')).epoch, 1);
   assert.equal((await A.next('reset')).epoch, 1);
   B.send({ t: 'put', kind: 'blocks', obj: { id: 'zombie', upd: 99 }, epoch: 0 }); // written before B saw the reset
@@ -80,6 +107,8 @@ try {
   const D = client('Dan'); await D.open; D.send({ t: 'hello', seed: seed('d') });
   const sd = await D.next('snapshot');
   assert.equal(sd.epoch, 1); assert.ok(sd.S.blocks.r, 'state survives a restart');
+  assert.ok(ytext(sd.y, 'rp').includes('load '), 'prompt text survives a restart, written once');
+  assert.equal(ytext(sd.y, 'rp').split('load').length, 2);
   const closed = new Promise(r => D.ws.on('close', r));
   D.send({ t: 'put', kind: 'blocks', obj: { id: 'big', upd: 1, v: 'x'.repeat(60000) }, epoch: 1 });
   assert.equal(await closed, 1009, 'a room cannot grow past MAX_ROOM_BYTES');

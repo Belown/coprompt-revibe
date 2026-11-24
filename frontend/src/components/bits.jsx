@@ -20,7 +20,7 @@ export function Chip({ s, types, title, selected }) {
 export const Ctl = ({ id, children }) => <span className="ctl">
   {children}
   <button title="Add prompt block below" onClick={() => addBlock('p', id)}><Icon name="plus" />prompt</button>
-  <button title="Add code block below (write code first, prompt later)" onClick={() => addBlock('c', id)}><Icon name="plus" />code</button>
+  <button className="ctl-code" title="Add code block below (write code first, prompt later)" onClick={() => addBlock('c', id)}><Icon name="plus" />code</button>
   <button title="Add heading below" onClick={() => addBlock('h', id)}><Icon name="plus" />heading</button>
   <button title="Delete" aria-label="Delete block" onClick={() => deleteBlock(id)}><Icon name="trash" /></button>
 </span>;

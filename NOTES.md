@@ -46,10 +46,13 @@ coprompt-revibe.wangleishen.com/api/    sync backend  WebSocket at /api/?room=�
 |---|---|
 | `hello {seed}`, sent on every (re)connect. The seed is used only if the room is empty: the server alone decides. | `snapshot {S, epoch}`, followed by the others' current `presence` and `busy` |
 | `put {kind, obj, epoch}`: one block or action | `put {kind, obj}` to the others. To the sender only if its write lost (then it carries the winning object). |
-| `presence {b}` / `busy {id, label}` | `presence {user, b}` / `busy {id, label, user}`, cleared for a user whose connection drops |
+| `y {u, aw, id}`: prompt text as a Y.js update (`u`) and/or this client's text cursor as an awareness update (`aw`), base64, at most every 100 ms | `y {u}` to the others (the server merges it into the room's Y.Doc first); `y {aw}`, the latest one replayed to late joiners; `y {gone}` when a connection drops |
+| `presence {b}` / `cursor {c}` / `busy {id, label}` | `presence {user, b}` / `cursor {user, c}` / `busy {id, label, user}`, cleared for a user whose connection drops |
 | `reset {S}` | `reset {S, epoch}` to everyone, the sender included |
 
-**Conflicts:** last-writer-wins per object (a block or an action). `obj.upd` is a per-object hybrid clock, `max(now, last seen upd + 1)`. The server keeps a write only if its `upd` is strictly greater than the stored one; otherwise it sends the winner back. So an edit made after seeing a collaborator's version always wins, even from a device whose clock is behind, and truly concurrent edits go to the higher timestamp. **Reset** bumps the room's `epoch`. Puts from an older epoch are dropped, so a stale window cannot bring back blocks of the old notebook. **Reconnect:** the client takes the new snapshot and resends every object it holds with a newer `upd` (edits made while disconnected). If the epoch changed in the meantime, it takes the snapshot as is.
+**Prompt text** is not part of the block objects: it lives in the room's Y.js document, one `XmlFragment` per prompt (`p:<block id>`), so concurrent typing merges character by character (§6.3). The snapshot carries the whole Y.js state (`y`). A prompt's *starting* text (the seed's, or a room saved before this change) is written into Y.js exactly once, by the server (`initTexts`, marked in the doc's `init` map), so two clients can never both write it. In local mode the transport plays that role.
+
+**Conflicts (everything else):** last-writer-wins per object (a block or an action). `obj.upd` is a per-object hybrid clock, `max(now, last seen upd + 1)`. The server keeps a write only if its `upd` is strictly greater than the stored one; otherwise it sends the winner back. So an edit made after seeing a collaborator's version always wins, even from a device whose clock is behind, and truly concurrent edits go to the higher timestamp. **Reset** bumps the room's `epoch`. Puts from an older epoch are dropped, so a stale window cannot bring back blocks of the old notebook. **Reconnect:** the client takes the new snapshot and resends every object it holds with a newer `upd` (edits made while disconnected). If the epoch changed in the meantime, it takes the snapshot as is.
 
 ## Code structure
 
@@ -71,26 +74,28 @@ frontend/src/
   main.jsx, App.jsx        entry (join screen when ?user= is missing); App wires global listeners and the window.cp test hook
   lib/                     no React in here: state and logic
     bus.js                 change counter; React subscribes with useSyncExternalStore
-    store.js               shared notebook S, put/LWW, presence/busy, "seen" record, seed/reset, reconnect merge
+    store.js               shared notebook S, put/LWW, Y.js send/receive, presence/busy/cursors, "seen" record, seed/reset, reconnect merge
     sync.js                transports: WebSocket to the backend, BroadcastChannel + localStorage fallback
+    ytext.js               prompt text in Y.js: segs() / setSegs() / renameNode(), the awareness for text cursors
     model.js               read-only views: ordered, text, label, members (heading → section), provider, codeAbove, …
     templates.js           Fig. 12–15 templates (+ Fig. 14–15 few-shot examples) and our refer/share/explain/describe ones
     llm.js                 DeepSeek / Anthropic client, settings dialog
     mechanisms.js          refer, request, share, link; batched request/link checks after every code change
     codegen.js             generate (add/edit), prompt from code, prompt-only versions, restore
     blocks.js              add / move / delete blocks, heading level
-    promptDom.js           the contenteditable prompt with atomic node chips; flash / jump
+    promptDom.js           node chips (DOM) and flash / jump
     python.js, pyWorker.js Pyodide in a Web Worker
     ui.js                  toast and modal services (usable outside React)
   components/              one component per paper element
-    Editor, PromptBlock, PromptInput, HeadingBlock     block editor (Fig. 3a)
+    Editor, PromptBlock, PromptInput, HeadingBlock     block editor (Fig. 3a); PromptInput = TipTap + Y.js, selection toolbar
+    Cursors                                             opt-in live mouse pointers
     Wiki                                                Prompt Wiki (Fig. 3b)
     Messages                                            message panel (Fig. 3c)
     panels/ExplainPanel, HistoryPanel, CommentsPanel   Fig. 3d, Fig. 3e, annotation
-    Header, Join, Overlays (modal, toasts, Make node), bits (avatar, dots, chips, controls), Icon
+    Header, Join, Overlays (modal, toasts), bits (avatar, dots, chips, controls), Icon
 ```
 
-The library owns the state, and React re-renders on every change. Two places deliberately bypass React: the prompt contenteditable (so a collaborator's update never moves your caret) and the code textarea (uncontrolled, for the same reason).
+The library owns the state, and React re-renders on every change. Two places deliberately bypass React: the prompt editor (TipTap, bound to Y.js; a collaborator's update is merged into it, so your caret stays put) and the code textarea (uncontrolled, so a collaborator's update never overwrites code you are editing).
 
 ## Demo script (Fig. 2 scenario, with the paper's own user-study dataset, Titanic)
 
@@ -132,9 +137,9 @@ The library owns the state, and React re-renders on every change. Two places del
 |---|---|---|
 | GPT-4 via OpenAI | DeepSeek (`deepseek-flash`, OpenAI-compatible API; Claude optional), called directly from the browser | The original model is a moving target anyway. Using the same templates keeps the comparison fair-ish. |
 | Next.js + React + TypeScript, LLM calls through a server-side route | Vite + React, plain JavaScript. LLM calls go from the browser with the user's own key, or through our small proxy with the server's key | Participants can try it without a key; with their own key nothing goes through the server. JavaScript kept the port from the single-file prototype small. |
-| TipTap/ProseMirror + Y.js CRDT + Hocuspocus server + Firebase RTDB/Firestore | A small WebSocket relay (Node + `ws`, one JSON file per room) with per-object last-writer-wins; `BroadcastChannel` + localStorage as the offline fallback | Enough for a demo across devices, at a few hundred lines instead of a CRDT stack. Concurrent typing in the *same* prompt is not merged. |
-| Rich-text toolbar (Fig. 3a: bold, highlight, …) | Plain contenteditable; nodes via **Make node** | Formatting is not part of any mechanism. |
-| Real-time cursors and text selections | Only "✎ Bob" on the block he is focused in | Cursor rendering inside contenteditable is a project of its own. |
+| TipTap/ProseMirror + Y.js CRDT + Hocuspocus server + Firebase RTDB/Firestore | Prompts: TipTap + Y.js, as in the paper, but merged and relayed by our own small WebSocket server (Node + `ws`, one JSON file per room) instead of Hocuspocus. Blocks and actions (the paper's Firebase RTDB part): per-object last-writer-wins on the same server. `BroadcastChannel` + localStorage as the fallback | One server for everything. Heading text and code are still last-writer-wins: code changes on blur or by the LLM, and headings are short. Offline editing is not a goal (everyone is online); edits made during a short disconnect are resent on reconnect. |
+| Rich-text toolbar (Fig. 4a) | The same marks (bold, italic, underline, strikethrough, code, highlight) plus **Make node**, in a toolbar that appears over a selection | Formatting is kept in Y.js and shown to everyone; the model sees the plain text. A mechanism that rewrites a whole prompt drops its formatting. |
+| Real-time cursors and text selections (§6) | Collaborators' text cursors (with their name) and selections inside prompts, always on. In addition, opt-in live **mouse pointers** (header toggle) | The mouse pointers go beyond the paper, so they are off until each user turns them on. |
 | Pyodide in a Web Worker | Also a Web Worker, but **Run re-executes every block above in a fresh namespace** | This is deterministic and avoids stale or partial kernel state, which the paper never specifies. |
 | Server-side logging (Firestore) | None | Logging is not part of the interaction. |
 | Icon-only mechanism buttons | Coloured word pills (icon + word: refer, request, share, link) | Easier for the audience to read. |
@@ -161,7 +166,7 @@ The library owns the state, and React re-renders on every change. Two places del
 
 ## What resisted reimplementation / what the paper made look easy
 
-- **Turning a selection into a node inside contenteditable.** It has to be an atomic chip, and remote updates must not destroy the cursor of the person typing. A focused prompt takes remote changes unless you have typing that hasn't been saved yet (300 ms debounce). Two people typing in the *same* prompt at the same moment is still last-writer-wins. TipTap + Y.js hide this whole problem in the paper. In React, the prompt stays an uncontrolled element for this reason.
+- **Turning a selection into a node, with several people typing.** The first version used a plain contenteditable with last-writer-wins per prompt, and two people typing in one prompt overwrote each other. It now uses what the paper used: TipTap (a node chip is an atomic inline node) bound to Y.js. Two details the paper does not mention: a prompt's starting text must be written into the CRDT by exactly one party (otherwise two clients that open an empty prompt at once both insert it, and it appears twice), and every mechanism that rewrites a prompt now has to go through the CRDT too (`setSegs`, `renameNode`).
 - **"Automatic" synchronisation means an LLM call on every code change, for every link and open request.** Batching (one request call and one link call per change, as Fig. 14–15's list inputs suggest) helps, but cascades through chained links still add a call per hop. The paper presents this as a lightweight background check.
 - **Fulfilment detection is an LLM yes/no judgement** (Fig. 15). False positives silently rewrite a collaborator's code, and borderline cases flip between runs (see findings). It connects to P12's "slight loss of control". Keeping requests live after fulfilment makes this matter more, which is why **Stop tracking** exists.
 - **A bug in my own build:** two windows that start at the same time each seeded their own notebook, which duplicated every block. With the backend, the server alone decides whether a room gets seeded (the first `hello` into an empty room). Real-time collaboration has many of these first-load and ordering edge cases (clock skew between devices, edits made while disconnected, a reset that races an edit), and the paper does not mention any.
@@ -180,7 +185,7 @@ The library owns the state, and React re-renders on every change. Two places del
 ## Verification
 
 - **Real Chrome, two tabs (Alice/Bob), DeepSeek** (single-file version, before the React port): every feature was exercised through the UI. That covers generate (add/edit), Run chaining with errors, plots and seaborn, sync and presence, wiki fold and jump, the message panel, history diff and restore, heading levels, delete, reset, and all four mechanisms including the share-while-offline pop-up and link rename propagation.
-- **Backend**: `cd backend && npm test` starts a server and checks the protocol: the seed race; LWW, with the winner sent back to a losing writer; a late joiner's presence; reset epochs; malformed and foreign-origin input; and persistence across a restart. Checked by hand in headless Edge with three separate browser profiles in one room: edits and presence sync across browsers, and a third user joins with the current state. When the backend is killed and restarted, the page shows *Reconnecting…*, and an edit made in the meantime reaches the others. `?local=1` syncs two tabs, and an unreachable backend falls back to local mode.
-- **Two-window headless test**: in `frontend/`, `npm run build && npm run preview`, then `npm run e2e` (it drives Edge over the DevTools protocol; `E2E_BASE` overrides the URL). It passed **52/52** on the React build with a **stubbed** LLM, before the sync backend was added; it has not been re-run since (it now uses a fresh room per run, so it works with or without a running backend). It covers every mechanism, the few-shot templates, batched and persistent requests, notes on every mechanism, section links, whole-prompt sources, code-first prompts, comments, shared context on edit, prompt-only history versions, the offline highlight, unlink by icon, reordering, Reset, and Python execution. Pyodide comes from jsdelivr; when the CDN is unreachable, the test stops with a clear message instead of hanging.
+- **Backend**: `cd backend && npm test` starts a server and checks the protocol: the seed race; LWW, with the winner sent back to a losing writer; a late joiner's presence; Y.js updates and awareness relayed, the seed's and a reset's prompt text written once by the server, and a room saved before Y.js converted on load; live cursors; reset epochs; malformed and foreign-origin input; the room size cap and access-code throttling; and persistence across a restart. Checked by hand in headless Edge with three separate browser profiles in one room: edits and presence sync across browsers, and a third user joins with the current state. When the backend is killed and restarted, the page shows *Reconnecting…*, and an edit made in the meantime reaches the others. `?local=1` syncs two tabs, and an unreachable backend falls back to local mode.
+- **Two-window headless test**: in `frontend/`, `npm run build && npm run preview`, then `npm run e2e` (it drives Edge over the DevTools protocol; `E2E_BASE` overrides the URL). It passes **62/62** with a **stubbed** LLM (2026-11-24), both against the sync backend and in local mode (backend not running), with a fresh room per run. It covers two people typing in one prompt at once (both edits kept), a collaborator's text cursor, the selection toolbar (Make node, bold), live mouse pointers, every mechanism, the few-shot templates, batched and persistent requests, notes on every mechanism, section links, whole-prompt sources, code-first prompts, comments, shared context on edit, prompt-only history versions, the offline highlight, unlink by icon, reordering, Reset, and Python execution. Pyodide comes from jsdelivr; when the CDN is unreachable, the test stops with a clear message instead of hanging.
 - **Not yet re-run with a real model:** the new and changed prompts (whole-prompt refer, prompt-from-code, few-shot link and request, batched inputs) were only checked with the stub. The real-model findings above predate them.
 - Rehearse the demo script once before class: the model's choices (variable names, trailing `dropna()`) change what each mechanism visibly does.

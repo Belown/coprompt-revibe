@@ -1,15 +1,16 @@
 // Read-only views over the notebook state.
 import { S } from './store.js';
 import { ME } from './util.js';
+import { segs } from './ytext.js';
 
 export const ordered = () => Object.values(S.blocks).filter(b => !b.del).sort((a, b) => a.pos - b.pos);
-export const text = b => b.kind === 'h' ? b.text : b.segs.map(s => s.v).join('');
-export const label = ref => { const b = S.blocks[ref.b]; if (!b) return '?'; const s = ref.n && b.segs?.find(s => s.id === ref.n); return s ? s.v : text(b); };
+export const text = b => b.kind === 'h' ? b.text : segs(b.id).map(s => s.v).join('');
+export const label = ref => { const b = S.blocks[ref.b]; if (!b) return '?'; const s = ref.n && b.kind === 'p' && segs(b.id).find(s => s.id === ref.n); return s ? s.v : text(b); };
 // actions on deleted blocks, unlinked links and closed requests go quiet
 export const live = a => a.status !== 'unlinked' && a.status !== 'closed' && !S.blocks[a.src.b]?.del && !S.blocks[a.tgt.b]?.del;
 export const actsOn = (b, n) => Object.values(S.actions).filter(a => live(a) &&
   ((a.src.b === b && (n === undefined || a.src.n === n)) || (a.tgt.b === b && (n === undefined || a.tgt.n === n))));
-export const snap = (b, action, by = ME) => ({ ts: Date.now(), by, action, segs: structuredClone(b.segs), code: b.code });
+export const snap = (b, action, by = ME) => ({ ts: Date.now(), by, action, segs: segs(b.id), code: b.code });
 export const prevCode = b => [...(b.hist || [])].reverse().find(v => v.code !== b.code)?.code ?? ''; // skips prompt-only versions
 
 export function ancestors(id) { // headings enclosing a block

@@ -3,6 +3,7 @@ import { S, ui, put } from './store.js';
 import { ME } from './util.js';
 import { ordered, text, section } from './model.js';
 import { toast } from './ui.js';
+import { setSegs } from './ytext.js';
 import { uid } from './util.js';
 
 // kind: 'p' prompt block, 'c' code-first block (a prompt block that starts in its code area), 'h' heading
@@ -12,7 +13,7 @@ export function addBlock(kind, afterId) {
   const id = uid();
   const level = list.slice(0, i + 1).findLast(x => x.kind === 'h')?.level ?? 1; // a sibling of the heading above
   const b = kind === 'h' ? { id, pos, kind, level, text: '', author: ME }
-    : { id, pos, kind: 'p', segs: [], author: ME, editor: ME, code: '', out: null, hist: [] };
+    : { id, pos, kind: 'p', author: ME, editor: ME, code: '', out: null, hist: [] }; // its text lives in Y.js (lib/ytext.js)
   ui.focus = { id, part: kind === 'h' ? 'heading' : kind === 'c' ? 'code' : 'prompt' };
   put('blocks', b);
   return id;
@@ -36,4 +37,4 @@ export function indent(id, d) {
   for (const x of [b, ...section(id).filter(x => x.kind === 'h')]) { x.level += d; put('blocks', x); }
 }
 export function setHeadingText(id, t) { const b = S.blocks[id]; b.text = t; put('blocks', b); }
-export function setPromptText(id, t) { const b = S.blocks[id]; b.segs = t ? [{ t: 'text', v: t }] : []; b.editor = ME; put('blocks', b); }
+export function setPromptText(id, t) { setSegs(id, t ? [{ t: 'text', v: t }] : []); const b = S.blocks[id]; b.editor = ME; put('blocks', b); }

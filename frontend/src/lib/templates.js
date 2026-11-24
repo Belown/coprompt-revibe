@@ -1,5 +1,6 @@
 // Prompt templates. Fig. 12–15 are transcribed from the paper; refer/share/explain/describe are ours (the paper gives none).
 import { text } from './model.js';
+import { segs, setSegs } from './ytext.js';
 
 // Few-shot examples of Fig. 14 (link) and Fig. 15 (request), as JSON. Fig. 14's example is garbled in the paper
 // (its input shows A *before* the change while the reasoning says A was changed, and updated_code repeats A),
@@ -24,18 +25,18 @@ export const REQ_EX = {
     { id: 'qwedojio@o3289901hANUIl-jio', index: 6, reasoning: 'The UserB is requesting code to "provide me wine data" from the prompt "visualize wine data" UserA used. The code only plots a variable wine that is never loaded or returned, so it does not provide the data.', fulfilled: false }],
 };
 // a prompt with its nodes written as [[k|text]], so the LLM can rewrite the prompt while keeping the nodes
-export function marked(b, k = 0) { return b.segs.map(s => s.t === 'node' ? `[[${k++}|${s.v}]]` : s.v).join(''); }
-export function applyPrompt(b, s) { // parse a rewritten marked prompt back into segments; false if any node got lost
-  const nodes = b.segs.filter(x => x.t === 'node'), segs = [], got = new Set(), re = /\[\[(\d+)\|([^\]]*)\]\]/g;
+export function marked(sg, k = 0) { return sg.map(s => s.t === 'node' ? `[[${k++}|${s.v}]]` : s.v).join(''); }
+export function applyPrompt(id, s) { // parse a rewritten marked prompt back into the prompt's text; false if any node got lost
+  const nodes = segs(id).filter(x => x.t === 'node'), out = [], got = new Set(), re = /\[\[(\d+)\|([^\]]*)\]\]/g;
   let last = 0, m;
   while ((m = re.exec(s))) {
     const k = +m[1]; if (!nodes[k] || got.has(k) || !m[2].trim()) return false;
-    got.add(k); if (m.index > last) segs.push({ t: 'text', v: s.slice(last, m.index) });
-    segs.push({ ...nodes[k], v: m[2].trim() }); last = re.lastIndex;
+    got.add(k); if (m.index > last) out.push({ t: 'text', v: s.slice(last, m.index) });
+    out.push({ ...nodes[k], v: m[2].trim() }); last = re.lastIndex;
   }
   if (got.size !== nodes.length || !s.trim()) return false;
-  if (last < s.length) segs.push({ t: 'text', v: s.slice(last) });
-  b.segs = segs; return true;
+  if (last < s.length) out.push({ t: 'text', v: s.slice(last) });
+  setSegs(id, out); return true;
 }
 
 // Prompt templates — Fig. 12–15 of the paper (transcribed, with Fig. 14–15's few-shot examples), plus our own for refer/share/explain/describe (not given in paper).
@@ -107,8 +108,8 @@ Input:
 ${JSON.stringify(input, null, 2)}`,
   // not in the paper: how refer / share / fulfilled-request rebuild a prompt block
   regen: (mine, node, prov, msg, above, codeOnly) => `A collaborator's work is given as context for the user's prompt block. Rewrite the user's block so it builds on the collaborator's work (use the variables, columns and results the collaborator's code produces instead of re-deriving them).
-[$PROMPT] user's prompt, with its nodes marked as [[k|text]]: ${marked(mine)}
-[$NODE] the part of the user's prompt that points at the collaborator's work: ${node ? marked({ segs: [node] }, mine.segs.filter(s => s.t === 'node').indexOf(node)) : '(the whole prompt)'}
+[$PROMPT] user's prompt, with its nodes marked as [[k|text]]: ${marked(segs(mine.id))}
+[$NODE] the part of the user's prompt that points at the collaborator's work: ${node ? marked([node], segs(mine.id).filter(s => s.t === 'node').findIndex(s => s.id === node.id)) : '(the whole prompt)'}
 [$CODE] user's current code:
 ${mine.code || '(none yet)'}
 [$REFER] collaborator ${prov.author}'s prompt: ${prov.prompt}

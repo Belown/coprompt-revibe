@@ -2,10 +2,18 @@
 import { S, ui, put, busy, seenNow } from './store.js';
 import { emit } from './bus.js';
 import { ME, MECH, uid, trimWs } from './util.js';
-import { text, label, live, actsOn, members, inScope, provider, prevCode, snap, codeAbove } from './model.js';
+import { text, label, live, actsOn, members, section, inScope, provider, prevCode, snap, codeAbove } from './model.js';
 import { T, applyPrompt } from './templates.js';
-import { llm } from './llm.js';
+import { segs, setSegs, renameNode } from './ytext.js';
+import { llm, hasKey, needKey } from './llm.js';
 import { ask, toast, toastErr, isModalOpen } from './ui.js';
+import { restoreVersion } from './codegen.js';
+
+// toast after a block was rewritten automatically, with Undo back to the version just before the rewrite
+function rewritten(id, msg) {
+  const before = S.blocks[id]?.hist?.at(-2);
+  toast(msg, before ? { ms: 9000, action: { label: 'Undo', fn: () => restoreVersion(id, before) } } : undefined);
+}
 
 export async function commitCode(id, code, action, by = ME, visited = new Set()) {
   const b = S.blocks[id]; b.code = code;
@@ -22,7 +30,7 @@ async function afterCodeChange(id, visited) {
   // open requests: any change inside the target; fulfilled ones keep tracking the block that fulfilled them (Fig. 5c)
   const reqs = acts.filter(a => a.type === 'request' && a.src.b !== id &&
     ((a.status === 'open' && inScope(a.tgt, id)) || (a.status === 'fulfilled' && (a.fulfilledBy ?? a.tgt.b) === id)));
-  try { if (reqs.length) await checkRequests(reqs.map(a => a.id), id, visited); } catch (e) { toastErr(e.message); }
+  try { if (reqs.length) await checkRequests(reqs.map(a => a.id), id, visited); } catch (e) { toastErr(e); }
   const pairs = [], taken = new Set();
   for (const a of acts) if (a.type === 'link') for (const [mine, other] of [[a.src, a.tgt], [a.tgt, a.src]]) {
     if (!inScope(mine, id)) continue; // a heading end covers its whole section (§8: links between headings)
@@ -31,7 +39,7 @@ async function afterCodeChange(id, visited) {
       taken.add(m); pairs.push({ a, mine, other, m });
     }
   }
-  try { if (pairs.length) await syncLinks(pairs, id, visited); } catch (e) { toastErr(e.message); }
+  try { if (pairs.length) await syncLinks(pairs, id, visited); } catch (e) { toastErr(e); }
 }
 
 async function checkRequests(aids, provId, visited) {
@@ -51,9 +59,9 @@ async function checkRequests(aids, provId, visited) {
       }
       continue;
     }
-    try { await regen(a.src.b, a.src.n, provId, a, visited); } catch (e) { toastErr(e.message); continue; }
+    try { await regen(a.src.b, a.src.n, provId, a, visited); } catch (e) { toastErr(e); continue; }
     const cur = S.actions[a.id]; cur.status = 'fulfilled'; cur.fulfilledBy = provId; put('actions', cur);
-    toast(was === 'fulfilled' ? `“${text(p)}” changed: “${text(S.blocks[a.src.b])}” regenerated again (request still tracked).`
+    rewritten(a.src.b, was === 'fulfilled' ? `“${text(p)}” changed: “${text(S.blocks[a.src.b])}” regenerated again (request still tracked).`
       : `Request fulfilled by “${text(p)}”: “${text(S.blocks[a.src.b])}” regenerated.`);
   }
 }
@@ -72,10 +80,10 @@ async function syncLinks(pairs, changedId, visited) {
   for (const [i, p] of pairs.entries()) {
     const r = res.find(x => x?.id === pid(p)) || res.find(x => x?.index === i + 1);
     if (!r?.updated || !r.updated_code) continue;
-    const nb = S.blocks[p.m], seg = p.other.b === p.m && p.other.n && nb.segs.find(s => s.id === p.other.n);
-    if (seg && r.updated_phrase) seg.v = r.updated_phrase;
+    const nb = S.blocks[p.m];
+    if (p.other.b === p.m && p.other.n && r.updated_phrase) renameNode(p.m, p.other.n, r.updated_phrase);
     await commitCode(p.m, r.updated_code, 'link', p.a.by, visited);
-    toast(`Link: “${text(nb)}” updated automatically.`);
+    rewritten(p.m, `Link: “${text(nb)}” updated automatically.`);
   }
 }
 
@@ -85,15 +93,23 @@ async function regen(consumerId, nodeId, providerId, a, visited = new Set()) {
   const c = S.blocks[consumerId], codeOnly = a.type === 'share';
   busy(consumerId, `${a.type}: regenerating ${codeOnly ? 'code' : 'prompt + code'}…`);
   try {
-    const node = nodeId && c.segs.find(s => s.id === nodeId);
+    const node = nodeId && segs(consumerId).find(s => s.id === nodeId);
     const r = await llm(T.regen(c, node, provider(providerId), a.msg, codeAbove(consumerId), codeOnly), true);
     busy(consumerId, null);
-    const nc = S.blocks[consumerId];
-    if (!codeOnly && !(r.prompt && applyPrompt(nc, r.prompt))) { // fall back to renaming just the node
-      const nn = nodeId && nc.segs.find(s => s.id === nodeId); if (nn && r.node_text) nn.v = r.node_text;
+    if (!codeOnly && !(r.prompt && applyPrompt(consumerId, r.prompt))) { // fall back to renaming just the node
+      if (nodeId && r.node_text) renameNode(consumerId, nodeId, r.node_text);
     }
     await commitCode(consumerId, r.code, a.type, a.by, visited);
   } finally { busy(consumerId, null); }
+}
+
+// source and target overlap when one is (in) the other's section, headings included
+const within = (h, id) => S.blocks[h]?.kind === 'h' && section(h).some(x => x.id === id);
+export const overlaps = (a, b) => a === b || within(a, b) || within(b, a);
+// the mechanisms the current source can use on a target; [] = not a target (the wiki shows no pills there)
+export function targetKinds(tgtB) {
+  const src = ui.SOURCE; if (!src || !S.blocks[src.b] || overlaps(src.b, tgtB)) return [];
+  return S.blocks[src.b].kind === 'h' ? ['share', 'link'] : ['refer', 'request', 'share', 'link'];
 }
 
 // create a mechanism from the current source node to a target picked in the wiki (rowEl: the wiki row, for a selected phrase)
@@ -103,12 +119,13 @@ export async function mech(type, tgtB, rowEl) {
   if (src.b === tgtB) return toast('Pick a target in a different prompt.');
   const sb = S.blocks[src.b], tb = S.blocks[tgtB];
   if (sb.kind === 'h' && (type === 'refer' || type === 'request')) return toast('Refer and request rebuild one prompt: use a node or a whole prompt as the source.');
-  if (members(tgtB).includes(src.b) || members(src.b).includes(tgtB)) return toast('The source and the target overlap; pick a target outside the source’s section.');
+  if (overlaps(src.b, tgtB)) return toast('The source and the target overlap; pick a target outside the source’s section.');
   // target node: text selected in the wiki row → new node; else a clicked wiki node; else whole prompt/heading
   let n = null; const sel = getSelection();
   if (sel.rangeCount && !sel.isCollapsed && rowEl.contains(sel.anchorNode)) n = makeTargetNode(tgtB, sel);
   else if (ui.TGTNODE?.b === tgtB) n = ui.TGTNODE.n;
-  const tgt = { b: tgtB, n }, who = tb.author === ME ? 'your' : `${tb.author}’s`, what = tb.kind === 'h' ? 'task' : 'prompt';
+  if (type !== 'share' && !hasKey()) return needKey(); // ask for the key before the note, not after
+  const tgt = { b: tgtB, n }, who = tb.author === ME ? 'your' : `${tb.author}’s`, what = tb.kind === 'h' ? 'section' : 'prompt';
   // every mechanism carries an optional message (§6.2: "(3) additional messages"); for request it states the expected result
   const [title, body, placeholder, ok] = {
     refer: [`Refer to ${who} ${what}`, `Your prompt “${text(sb)}” is rewritten, with its code, from “${label(tgt)}” (prompt, code and execution result).`,
@@ -125,7 +142,7 @@ export async function mech(type, tgtB, rowEl) {
     status: type === 'refer' ? 'done' : type === 'link' ? 'active' : 'open', seen: [ME] };
   ui.SOURCE = ui.TGTNODE = null;
   put('actions', a);
-  if (type === 'refer') try { await regen(a.src.b, a.src.n, a.tgt.b, a); } catch (e) { toastErr(e.message); }
+  if (type === 'refer') try { await regen(a.src.b, a.src.n, a.tgt.b, a); rewritten(a.src.b, `Your prompt was rebuilt from “${label(tgt)}”.`); } catch (e) { toastErr(e); }
   if (type === 'link') toast('Linked. Changing either side now updates the other. Click the link dot to unlink.');
   if (type === 'share') toast(`Shared. Waiting for ${tb.author} to accept.`);
   if (type === 'request') toast(`Request sent to ${tb.author}. Your prompt updates when it is fulfilled.`);
@@ -139,13 +156,12 @@ export function setSource(id) { // whole prompt, or a whole section (heading), a
 function makeTargetNode(bid, sel) { // turn a phrase selected in a wiki row into a target node
   const span = sel.anchorNode.parentElement?.closest('[data-si]');
   if (!span || span !== sel.focusNode.parentElement?.closest('[data-si]')) return null;
-  const b = S.blocks[bid], si = +span.dataset.si, v = b.segs[si].v;
+  const sg = segs(bid), si = +span.dataset.si, v = sg[si].v;
   const [x, y] = trimWs(v, ...[sel.anchorOffset, sel.focusOffset].sort((p, q) => p - q));
   if (x === y) return null;
   const id = uid();
-  b.segs.splice(si, 1, { t: 'text', v: v.slice(0, x) }, { t: 'node', id, v: v.slice(x, y) }, { t: 'text', v: v.slice(y) });
-  b.segs = b.segs.filter(s => s.t === 'node' || s.v);
-  sel.removeAllRanges(); put('blocks', b);
+  sg.splice(si, 1, { t: 'text', v: v.slice(0, x) }, { t: 'node', id, v: v.slice(x, y) }, { t: 'text', v: v.slice(y) });
+  setSegs(bid, sg); sel.removeAllRanges();
   return id;
 }
 
@@ -167,7 +183,7 @@ export async function checkShares() {
   if (tb.kind === 'h') {
     tb.ctx = [...(tb.ctx || []).filter(c => (c.b ?? c) !== cur.src.b), { b: cur.src.b, msg: cur.msg, by: cur.by }]; put('blocks', tb);
     toast('Context attached to the task; prompts under it now use it.');
-  } else try { await regen(tb.id, cur.tgt.n, cur.src.b, cur); } catch (e) { toastErr(e.message); }
+  } else try { await regen(tb.id, cur.tgt.n, cur.src.b, cur); } catch (e) { toastErr(e); }
 }
 
 export function setStatus(aid, status) { const a = S.actions[aid]; a.status = status; put('actions', a); }

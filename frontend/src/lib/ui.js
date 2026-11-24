@@ -9,7 +9,7 @@ export function toast(m, { kind = 'info', ms = kind === 'err' ? 9000 : 4500, act
   setTimeout(() => dismissToast(t.id), ms);
 }
 export function dismissToast(id) { if (toasts.some(t => t.id === id)) { toasts = toasts.filter(t => t.id !== id); emit(); } }
-export const toastErr = m => toast(m, { kind: 'err' });
+export const toastErr = e => e.quiet || toast(e.message ?? e, { kind: 'err' }); // an Error or a message; quiet errors were already shown
 
 // modal queue: one dialog at a time; openModal resolves with {fieldKey: value} on confirm, null on cancel
 let queue = [];

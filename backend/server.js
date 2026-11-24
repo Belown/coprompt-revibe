@@ -1,7 +1,9 @@
 // CoPrompt sync server: one WebSocket relay per room, replacing the BroadcastChannel between windows.
-// The room state is {epoch, S}; S = {blocks: {}, actions: {}}, the same object the frontend keeps.
-// ponytail: whole-object last-writer-wins, no CRDT. Concurrent typing in one prompt is still not merged.
+// The room state is {epoch, S, y}; S = {blocks: {}, actions: {}}, the same object the frontend keeps, synced
+// per object, last writer wins. y is the room's Y.js document: the text of every prompt (a CRDT, so concurrent
+// typing in one prompt merges, §6.3), one XmlFragment 'p:<block id>' each.
 import http from 'node:http';
+import * as Y from 'yjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { WebSocketServer } from 'ws';
@@ -15,7 +17,7 @@ const MAX_MSG_BYTES = +env.MAX_MSG_BYTES || 2 * 1024 * 1024; // a block carries 
 const MAX_CONN_PER_ROOM = +env.MAX_CONN_PER_ROOM || 20;
 const MAX_ROOMS = +env.MAX_ROOMS || 100;                    // rooms on disk; caps what an anonymous client can create
 const MAX_ROOM_BYTES = +env.MAX_ROOM_BYTES || 20 * 1024 * 1024; // one room's JSON; bounds RAM and disk (MAX_ROOMS × this)
-const MSG_RATE = +env.MSG_RATE || 20;                         // messages per second per connection, sustained
+const MSG_RATE = +env.MSG_RATE || 30;                         // messages per second per connection, sustained
 const MSG_BURST = +env.MSG_BURST || 200;                      // a reconnect replays every locally newer object at once
 const HEARTBEAT_MS = +env.HEARTBEAT_MS || 30000;
 const SAVE_DELAY_MS = 1000;
@@ -25,7 +27,30 @@ const KINDS = ['blocks', 'actions'];
 const validState = S => S && typeof S === 'object' && KINDS.every(k => S[k] && typeof S[k] === 'object' && !Array.isArray(S[k]));
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
-const rooms = new Map(); // name -> {name, file, epoch, S, clients: Set<ws>, timer}
+const rooms = new Map(); // name -> {name, file, epoch, S, ydoc, bytes, clients: Set<ws>, timer}
+const b64 = u => Buffer.from(u).toString('base64');
+
+// The Y.js shape y-tiptap gives a TipTap paragraph: text is an XmlText, a node chip an XmlElement 'promptNode'.
+// Same function as paragraph() in frontend/src/lib/ytext.js.
+function paragraph(segs) {
+  const p = new Y.XmlElement('paragraph');
+  p.insert(0, segs.filter(s => typeof s?.v === 'string' && (s.t === 'node' || s.v)).map(s => {
+    if (s.t === 'node') { const n = new Y.XmlElement('promptNode'); n.setAttribute('id', String(s.id)); n.setAttribute('v', s.v); return n; }
+    const t = new Y.XmlText(); t.insert(0, s.v); return t;
+  }));
+  return p;
+}
+// A prompt block's starting text (the seed's, or a room saved before prompts were Y.js) goes into its fragment once,
+// here on the server, so two clients can never both write it (which would duplicate it).
+function initTexts(r) {
+  const done = r.ydoc.getMap('init');
+  r.ydoc.transact(() => {
+    for (const b of Object.values(r.S.blocks)) if (b?.kind === 'p' && typeof b.id === 'string' && !done.has(b.id)) {
+      done.set(b.id, true);
+      if (Array.isArray(b.segs) && b.segs.length) r.ydoc.getXmlFragment('p:' + b.id).insert(0, [paragraph(b.segs)]);
+    }
+  }, 'server');
+}
 
 function openRoom(name) {
   let r = rooms.get(name);
@@ -33,14 +58,22 @@ function openRoom(name) {
   const file = path.join(DATA_DIR, name + '.json');
   const saved = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
   if (!saved && (rooms.size >= MAX_ROOMS || fs.readdirSync(DATA_DIR).filter(f => f.endsWith('.json')).length >= MAX_ROOMS)) return null;
-  r = { name, file, epoch: saved?.epoch || 0, S: saved?.S || null, bytes: saved ? fs.statSync(file).size : 0, clients: new Set(), timer: null };
+  r = { name, file, epoch: saved?.epoch || 0, S: saved?.S || null, ydoc: new Y.Doc(), bytes: saved ? fs.statSync(file).size : 0, clients: new Set(), timer: null };
+  if (saved?.y) Y.applyUpdate(r.ydoc, Buffer.from(saved.y, 'base64'));
+  // every change reaches the other clients: a client's update (origin = its socket) and the server's own init
+  r.ydoc.on('update', (u, origin) => {
+    const s = JSON.stringify({ t: 'y', u: b64(u) });
+    for (const c of r.clients) if (c !== origin && c.readyState === 1) c.send(s);
+    if (r.S) changed(r);
+  });
+  if (r.S) initTexts(r); // a room saved before prompts were Y.js
   rooms.set(name, r);
   return r;
 }
 function flush(r) {
   clearTimeout(r.timer); r.timer = null;
   if (!r.S) return;
-  const json = JSON.stringify({ epoch: r.epoch, S: r.S });
+  const json = JSON.stringify({ epoch: r.epoch, S: r.S, y: b64(Y.encodeStateAsUpdate(r.ydoc)) });
   r.bytes = json.length; // exact again; between flushes puts are added on top (an overestimate, so the cap errs safe)
   fs.writeFileSync(r.file + '.tmp', json);
   fs.renameSync(r.file + '.tmp', r.file); // atomic: a crash mid-write never leaves half a room
@@ -55,10 +88,11 @@ function onMessage(ws, m, size) {
   const r = ws.room;
   switch (m.t) {
     case 'hello': { // the first client into an empty room supplies the seed; everyone else gets the room as it is
-      if (!r.S) { if (!validState(m.seed)) return ws.close(1007, 'bad seed'); r.S = m.seed; r.bytes = size; changed(r); }
-      send(ws, { t: 'snapshot', S: r.S, epoch: r.epoch });
+      if (!r.S) { if (!validState(m.seed)) return ws.close(1007, 'bad seed'); r.S = m.seed; r.bytes = size; initTexts(r); changed(r); }
+      send(ws, { t: 'snapshot', S: r.S, epoch: r.epoch, y: b64(Y.encodeStateAsUpdate(r.ydoc)) });
       for (const c of r.clients) if (c !== ws) { // replay what the others are doing right now
         if (c.b) send(ws, { t: 'presence', user: c.user, b: c.b });
+        if (c.aw) send(ws, { t: 'y', aw: c.aw }); // their text cursor (Y.js awareness)
         for (const [id, label] of Object.entries(c.busy)) send(ws, { t: 'busy', id, label, user: c.user });
       }
       return;
@@ -77,6 +111,19 @@ function onMessage(ws, m, size) {
     case 'presence':
       ws.b = typeof m.b === 'string' && NAME.test(m.b) ? m.b : null; // a block id
       return others(ws, { t: 'presence', user: ws.user, b: ws.b });
+    case 'y': { // prompt text (a Y.js update, merged here and relayed by the ydoc's update handler) and/or awareness
+      if (!r.S) return;
+      if (typeof m.u === 'string') {
+        if (r.bytes + size > MAX_ROOM_BYTES) return ws.close(1009, 'room full');
+        try { Y.applyUpdate(r.ydoc, Buffer.from(m.u, 'base64'), ws); } catch { return ws.close(1007, 'bad update'); }
+        r.bytes += size;
+      }
+      if (typeof m.aw === 'string' && m.aw.length <= 4096) { // text cursor and selection: relayed, the latest kept for late joiners
+        ws.aw = m.aw; if (Number.isSafeInteger(m.id)) ws.yid = m.id;
+        others(ws, { t: 'y', aw: m.aw });
+      }
+      return;
+    }
     case 'cursor': { // a live mouse pointer: block id + position in it as fractions; not stored, not replayed
       const c = m.c, ok = c && typeof c === 'object' && typeof c.b === 'string' && NAME.test(c.b)
         && [c.x, c.y].every(v => Number.isFinite(v) && v >= 0 && v <= 1);
@@ -93,7 +140,8 @@ function onMessage(ws, m, size) {
     case 'reset':
       if (!validState(m.S)) return ws.close(1007, 'bad reset');
       r.S = m.S; r.bytes = size; r.epoch++; changed(r);
-      return all(r, { t: 'reset', S: r.S, epoch: r.epoch }); // the sender too, so it learns the new epoch
+      all(r, { t: 'reset', S: r.S, epoch: r.epoch }); // the sender too, so it learns the new epoch
+      return initTexts(r); // the new blocks' text follows as a Y.js update (old fragments stay, unreferenced)
   }
 }
 
@@ -132,6 +180,7 @@ server.on('upgrade', (req, sock, head) => {
       if (ws.b) others(ws, { t: 'presence', user: ws.user, b: null }); // no ghost "✎ Bob" after a dropped connection
       for (const id of Object.keys(ws.busy)) others(ws, { t: 'busy', id, label: null, user: ws.user });
       if (ws.cur) others(ws, { t: 'cursor', user: ws.user, c: null });
+      if (ws.yid != null) others(ws, { t: 'y', gone: ws.yid }); // drop their text cursor now, not after the awareness timeout
       if (!room.clients.size) { flush(room); rooms.delete(room.name); }
     });
   });

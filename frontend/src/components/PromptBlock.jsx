@@ -12,7 +12,7 @@ import { actsOn, text } from '../lib/model.js';
 import { generate, promptFromCode } from '../lib/codegen.js';
 import { commitCode, setSource } from '../lib/mechanisms.js';
 import { run, clearOutput } from '../lib/python.js';
-import { commitPrompt, flash } from '../lib/promptDom.js';
+import { flash } from '../lib/promptDom.js';
 import { toast } from '../lib/ui.js';
 
 function CodeArea({ b }) { // uncontrolled: a collaborator's update never overwrites code you are editing
@@ -50,9 +50,11 @@ export default function PromptBlock({ b, dnd, rail }) {
     dnd.dragging === id && 'dragging', dnd.drop?.id === id && (dnd.drop.after ? 'drop-after' : 'drop-before')].filter(Boolean).join(' ');
   return <div ref={ref} className={cls} data-id={id} style={{ '--who': ucol(others[0]), ...rail }}
     draggable={armed} onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); dnd.start(id); }}
-    onDragEnd={() => { arm(false); dnd.end(); }} onClick={() => markSeen(id)} onFocus={() => markSeen(id)}>
+    onDragEnd={() => { arm(false); dnd.end(); }} onClick={() => markSeen(id)} onFocus={e => e.target.closest('.newtag') || markSeen(id)}>
     <span className="newtag" title="Changed by someone else or automatically. Click the block to dismiss.">
-      {isNew ? (MECH[last.action] ? `Auto-updated · ${last.action}` : `Updated by ${last.by} · ${last.action}`) : ''}</span>
+      {isNew ? (MECH[last.action] ? `Auto-updated · ${last.action}` : `Updated by ${last.by} · ${last.action}`) : ''}
+      {/* an automatic rewrite of your code: one click to see what changed (and restore the version before it) */}
+      {isNew && MECH[last.action] ? <button className="nt-act" onClick={() => setPanel('history')}>Review</button> : null}</span>
     <div className="phead">
       <Grip arm={arm} />
       <Avatar u={b.editor || b.author} title={`created by ${b.author}, last modified by ${b.editor || b.author}`} />
@@ -69,7 +71,7 @@ export default function PromptBlock({ b, dnd, rail }) {
     <Presence users={others} />
     <CodeArea b={b} />
     <div className="runbar">
-      <button className="gen" disabled={!!busy} title="Generate code from the prompt (Enter in the prompt)" onClick={() => { commitPrompt(id); generate(id); }}>
+      <button className="gen" disabled={!!busy} title="Generate code from the prompt (Enter in the prompt)" onClick={() => generate(id)}>
         <Icon name="sparkles" /><span className="gen-l">{hasCode ? 'Update code' : 'Generate code'}</span><kbd>Enter</kbd></button>
       <button className="p2c" disabled={!!busy} hidden={!!text(b).trim()} title="Code-first: write the prompt from this code and its comments"
         onClick={() => promptFromCode(id, ref.current.querySelector('textarea').value)}><Icon name="sparkles" />Prompt from code</button>

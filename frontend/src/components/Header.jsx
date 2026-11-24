@@ -33,16 +33,16 @@ export default function Header() {
   return <header>
     <img className="logo" src="../favicon.svg" alt="" width="28" height="28" />
     <h1 className="brand">CoPrompt <small>revibe · CHI ’24</small></h1>
-    <span id="me"><Avatar u={ME} />You are {ME}</span>
+    <span id="me"><Avatar u={ME} /><span><span className="me-l">You are </span>{ME}</span></span>
     <span className="grow" />
     <span id="conn" data-s={ui.conn} title={CONN_TIP[ui.conn]}>{CONN[ui.conn]}</span>
     <span id="pystat" data-s={ui.py.s}>{ui.py.text}</span>
     <button id="cursors" aria-pressed={ui.cursors} onClick={() => setCursors(!ui.cursors)}
       title="Show other people’s mouse pointers and share yours. Off: neither."><Icon name="pointer" />Live cursors</button>
     <button id="invite" onClick={invite} title="Copy a link to this session for others to join"><Icon name="share" />Invite</button>
-    <button id="settings" className={key ? undefined : 'needs'} onClick={openSettings}><Icon name="key" />{key ? 'API key' : 'Add API key'}</button>
+    <button id="settings" className={key ? undefined : 'needs'} onClick={() => openSettings()}><Icon name="key" />{key ? 'API key' : 'Add API key'}</button>
     {/* session and demo controls: used now and then, so they live behind one button (native popover: Esc / outside click close it) */}
-    <button id="morebtn" popovertarget="more" title="Session and demo" aria-label="Session and demo"><Icon name="more" /></button>
+    <button id="morebtn" popoverTarget="more" title="Session and demo" aria-label="Session and demo"><Icon name="more" /></button>
     <div id="more" popover="auto" onClick={e => e.target.closest('button') && e.currentTarget.hidePopover()}>
       <p className="more-room">Session <code>{ROOM}</code></p>
       <button id="other" onClick={() => window.open(otherUrl(), OTHER, 'width=1100,height=900')}><Icon name="external" />Open as {OTHER}</button>

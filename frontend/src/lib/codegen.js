@@ -5,6 +5,7 @@ import { text, codeAbove, sharedCtx, snap } from './model.js';
 import { T } from './templates.js';
 import { llm } from './llm.js';
 import { commitCode } from './mechanisms.js';
+import { setSegs } from './ytext.js';
 import { toast, toastErr } from './ui.js';
 
 export async function generate(id) {
@@ -19,7 +20,7 @@ export async function generate(id) {
     busy(id, null); // this block is done; downstream link/request checks show their own labels
     S.blocks[id].editor = ME;
     await commitCode(id, code, b.code.trim() ? 'edit prompt' : 'add prompt');
-  } catch (e) { toastErr(e.message); } finally { busy(id, null); }
+  } catch (e) { toastErr(e); } finally { busy(id, null); }
 }
 
 // code-first block (§6.3: "initiate a code block and manually input code, pausing midway to generate a prompt block from the code comments")
@@ -31,9 +32,10 @@ export async function promptFromCode(id, typed) {
   try {
     const r = await llm(T.describe(S.blocks[id].code), true), v = String(r.prompt || '').trim();
     if (!v) throw new Error('The model returned no prompt.');
-    const b = S.blocks[id]; b.segs = [{ t: 'text', v }]; b.editor = ME;
+    setSegs(id, [{ t: 'text', v }]);
+    const b = S.blocks[id]; b.editor = ME;
     b.hist = [...(b.hist || []), snap(b, 'prompt from code')].slice(-40); seenNow(b); put('blocks', b);
-  } catch (e) { toastErr(e.message); } finally { busy(id, null); }
+  } catch (e) { toastErr(e); } finally { busy(id, null); }
 }
 
 // version a prompt edit that did not (yet) regenerate code, so the history view follows the prompt's evolution too
@@ -45,6 +47,6 @@ export function snapPrompt(id) {
 }
 
 export async function restoreVersion(id, v) {
-  const b = S.blocks[id]; b.segs = structuredClone(v.segs); b.editor = ME;
+  setSegs(id, v.segs); S.blocks[id].editor = ME;
   await commitCode(id, v.code, 'restore');
 }

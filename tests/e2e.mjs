@@ -59,13 +59,7 @@ function helpers() {
   window.until = async (f, ms = 20000) => { const t = Date.now(); while (Date.now() - t < ms) { if (await f()) return true; await new Promise(r => setTimeout(r, 100)); } return false; };
   window.tick = () => new Promise(r => setTimeout(r, 50));
   window.newPrompt = async (afterText, t) => { const id = addBlock('p', byText(afterText).id); setPromptText(id, t); await generate(id); return id; };
-  window.makeNode = async (id, word) => {
-    await until(() => el(id)?.querySelector('.prompt')?.textContent.includes(word));
-    const p = el(id).querySelector('.prompt'); p.focus();
-    const tn = [...p.childNodes].find(n => n.nodeType === 3 && n.textContent.includes(word)), i = tn.textContent.lastIndexOf(word);
-    const r = document.createRange(); r.setStart(tn, i); r.setEnd(tn, i + word.length); const s = getSelection(); s.removeAllRanges(); s.addRange(r);
-    document.querySelector('#mk').dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); p.blur(); return SOURCE;
-  };
+  window.makeNode = async (id, word) => { await until(() => nodeFromWord(id, word)); const e = editorOf(id); e.commands.blur(); e.view.dom.dispatchEvent(new FocusEvent('blur')); return SOURCE; };
   window.clickOK = (v = 'fill missing values instead of dropping the columns') => {
     const b = document.querySelector('#modal .primary'); if (!b) return false;
     const i = document.querySelector('#modal input'); if (i) i.value = v; b.click(); return true;
@@ -101,7 +95,7 @@ try {
   const refP = B.ev(`mech('refer', '${encId}', document.body)`);
   check(await B.ev(`until(() => clickOK('use the encoded frame'))`), 'refer asks for an optional note (gap 3)');
   await refP;
-  check(await B.ev(`until(() => S.blocks['${bId}'].segs.some(s => s.t==='node' && s.v==='df_encoded'))`), 'refer rewrites source node (df → df_encoded)');
+  check(await B.ev(`until(() => segs('${bId}').some(s => s.t==='node' && s.v==='df_encoded'))`), 'refer rewrites source node (df → df_encoded)');
   check(await B.ev(`text(S.blocks['${bId}']) === 'calculate the skewness of all encoded features in df_encoded'`), 'refer rewrites the whole prompt and keeps the node (Fig. 4c)');
   check(await B.ev(`acts('refer')[0].msg === 'use the encoded frame' && __last.regen.includes('[$MESSAGE]') && __last.regen.includes('use the encoded frame')`), 'refer note is stored and sent to the model');
   check(await A.ev(`until(() => acts('refer').length === 1)`), 'refer action appears in Alice’s message panel');
@@ -137,7 +131,7 @@ try {
   check(await A.ev(`T.request({}).includes('load_iris') && T.request({}).includes('reasoning') && T.link([]).includes('calculate_sum')`), 'request/link templates carry the Fig. 14–15 few-shot examples (gap 1)');
   check(await A.ev(`__last.request.includes('"completion"')`), 'request check input has the completion context of Fig. 15');
   // gap 2 + batching: a second request on the same block; one change → ONE batched request call; the fulfilled request fires again
-  await B.ev(`(()=>{ SOURCE = { b: '${bId}', n: S.blocks['${bId}'].segs.find(s => s.t==='node').id }; return 1; })()`);
+  await B.ev(`(()=>{ SOURCE = { b: '${bId}', n: segs('${bId}').find(s => s.t==='node').id }; return 1; })()`);
   const req2 = B.ev(`mech('request', '${encId}', document.body)`);
   await B.ev(`until(() => clickOK('skewness on encoded data'))`); await req2;
   await A.ev(`until(() => acts('request').length === 2)`);
@@ -145,8 +139,10 @@ try {
   await A.ev(`commitCode('${encId}', "df_encoded = pd.get_dummies(df)\\nprint(df_encoded.shape)", 'edit code')`);
   check(await A.ev(`__n.request`) - n0 === 1, 'two requests on one block are checked in ONE batched call (Fig. 15 takes a list)');
   check(await B.ev(`until(() => nHist('${b2}', 'request') > ${h0} && acts('request').every(a => a.status === 'fulfilled'))`), 'a fulfilled request regenerates again on a later change (gap 2, Fig. 5c)');
+  check(await A.ev(`until(() => [...document.querySelectorAll('#toast button')].some(b => b.textContent === 'Undo'))`), 'an automatic rewrite’s toast offers Undo');
   // the unseen highlight: Bob's block was rewritten from Alice's window → highlighted for Bob until he clicks it
   check(await B.ev(`until(() => el('${bId}').classList.contains('unseen') && el('${bId}').querySelector('.newtag').textContent.includes('Auto-updated'))`), 'automatic change to Bob’s block is highlighted for Bob');
+  check(await B.ev(`(async()=>{ el('${bId}').querySelector('.nt-act').click(); return until(() => el('${bId}').querySelector('.panel').textContent.length > 0 && !el('${bId}').classList.contains('unseen')); })()`), 'Review on the highlight opens the block’s history');
   check(await B.ev(`(async()=>{ el('${bId}').click(); return until(() => !el('${bId}').classList.contains('unseen')); })()`), 'clicking the block dismisses the highlight');
   await B.ev(`(()=>{ [...document.querySelectorAll('#msgs .msg')].find(m => m.textContent.includes('skewness on encoded data')).querySelector('button[title="Stop checking this request"]').click(); return 1; })()`);
   check(await A.ev(`until(() => acts('request', a => a.src.b === '${bId}')[0].status === 'closed')`), 'requester can stop tracking a request');
@@ -183,10 +179,10 @@ try {
   check(await B.ev(`until(() => S.blocks['${bId}'].notes?.length === 1 && el('${bId}').querySelector('.ncount').textContent === '1' && document.querySelector('#toast').textContent.includes('why log1p'))`), 'comment syncs to Bob with count badge and notification (gap 6)');
   check(await B.ev(`(async()=>{ el('${bId}').querySelector('[aria-label=Comments]').click(); return until(() => el('${bId}').querySelector('.nlist')?.textContent.includes('why log1p here?')); })()`), 'comment thread renders');
   // prompt edits without regeneration are versioned
-  await A.ev(`(async()=>{ await until(() => el('${fId}')); const p = el('${fId}').querySelector('.prompt'); p.focus(); p.textContent = 'remove rows with Fare above 250'; p.dispatchEvent(new Event('input', { bubbles: true })); p.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); return 1; })()`); // background tabs fire no blur events
+  await A.ev(`(async()=>{ await until(() => editorOf('${fId}')); const e = editorOf('${fId}'); e.view.focus(); e.commands.setContent('<p>remove rows with Fare above 250</p>'); e.commands.blur(); e.view.dom.dispatchEvent(new FocusEvent('blur')); return 1; })()`);
   check(await A.ev(`until(() => S.blocks['${fId}'].hist.at(-1).action === 'edit prompt text' && text(S.blocks['${fId}']) === 'remove rows with Fare above 250')`), 'a prompt edit without regeneration becomes a history version');
   // small UI pieces: jump to node, Reset output, reorder
-  check(await A.ev(`(()=>{ const n = S.blocks['${bId}'].segs.find(s => s.t==='node').id; jump('${bId}', n); return el('${bId}').querySelector('.node[data-n="' + n + '"]').getAnimations().length > 0; })()`), 'jumping from a message pulses the node itself');
+  check(await A.ev(`(()=>{ const n = segs('${bId}').find(s => s.t==='node').id; jump('${bId}', n); return el('${bId}').querySelector('.node[data-n="' + n + '"]').getAnimations().length > 0; })()`), 'jumping from a message pulses the node itself');
   await A.ev(`(()=>{ el(byText('load data').id).querySelector('.rst').click(); return 1; })()`);
   check(await B.ev(`until(() => S.blocks[byText('load data').id].out === null)`), 'Reset clears the output in both windows');
   await A.ev(`moveBlock('${cId}', byText('drop columns').id, false)`);
@@ -198,14 +194,32 @@ try {
   check(await B.ev(`until(() => ${lv} === '1,2,2' && getComputedStyle(el(hid('3. Feature'))).getPropertyValue('--d') === '1')`), 'outdent moves the section’s subheadings with it (synced, re-indented)');
   await A.ev(`indent(hid('Feature Analysis'), 1); indent(hid('Data Preparation'), 1)`);
   check(await A.ev(`${lv} === '2,3,3' && S.blocks[hid('Data Preparation')].level === 2`), 'indent restores it; indenting past the heading above is refused');
+  // picking: rows inside (or around) the source section get no pills; the rest only share/link
+  await A.ev(`setSource(hid('Data Preparation'))`);
+  check(await A.ev(`until(() => { const pills = t => [...document.querySelector('#wiki [data-bid="' + hid(t) + '"]').querySelectorAll('.pill')].map(x => x.textContent).join();
+    return pills('1. Deal') === '' && pills('Titanic') === '' && pills('Feature Analysis') === 'share,link' && document.querySelector('#wiki [data-bid="' + hid('2. Encode') + '"]').classList.contains('nope'); })`), 'only valid targets get pills; overlapping rows are greyed');
+  await A.ev(`(() => { SOURCE = null; return 1; })()`);
 
-  // 8. earlier bug fixes: focused-but-untouched prompt takes remote edits; trailing space trimmed; deleted blocks silence links
-  await B.ev(`(()=>{ const p = el(byText('drop columns').id).querySelector('.prompt'); p.focus(); return document.activeElement === p; })()`);
-  await A.ev(`(()=>{ const b = byText('drop columns'); b.segs = [...b.segs, { t: 'text', v: ' (edited by Alice)' }]; put('blocks', b); })()`);
-  check(await B.ev(`until(() => document.activeElement.classList.contains('prompt') && document.activeElement.textContent.includes('(edited by Alice)'))`), 'focused (untouched) prompt shows a collaborator’s edit');
-  await B.ev(`document.activeElement.blur(); 1`);
+  // 8. collaborative prompt text (Y.js, §6.3): two people typing in one prompt at once both keep their text,
+  // and each sees the other's text cursor
+  const dc = await A.ev(`byText('drop columns').id`);
+  await B.ev(`(async()=>{ await until(() => editorOf('${dc}')); const e = editorOf('${dc}'); e.view.focus(); e.commands.setTextSelection(e.state.doc.content.size - 1); return 1; })()`);
+  await Promise.all([
+    A.ev(`(()=>{ const e = editorOf('${dc}'); e.view.focus(); e.commands.setTextSelection(1); e.commands.insertContent('please '); return 1; })()`),
+    B.ev(`(()=>{ editorOf('${dc}').commands.insertContent(' and keep Age'); return 1; })()`),
+  ]);
+  const both = `until(() => text(S.blocks['${dc}']).startsWith('please ') && text(S.blocks['${dc}']).endsWith(' and keep Age'))`;
+  check(await A.ev(both) && await B.ev(both), 'two people typing in one prompt at once: both edits are kept (Y.js)');
+  check(await A.ev(`until(() => [...el('${dc}').querySelectorAll('.ccaret-l')].some(x => x.textContent === 'Bob'))`), 'Bob’s text cursor shows in Alice’s copy of the prompt');
+  for (const P of [A, B]) await P.ev(`(()=>{ const e = editorOf('${dc}'); e.commands.blur(); e.view.dom.dispatchEvent(new FocusEvent('blur')); return 1; })()`);
+  // earlier bug fixes: trailing space trimmed; deleted blocks silence links
   const tId = await A.ev(`newPrompt('5. Deal with outliers', 'remove outliers of df using IQR')`);
-  check(await A.ev(`(async()=>{ await until(() => el('${tId}')?.querySelector('.prompt').textContent.includes('IQR')); const p = el('${tId}').querySelector('.prompt'); p.focus(); const tn = [...p.childNodes].find(n => n.nodeType === 3); const i = tn.data.indexOf('df'); const r = document.createRange(); r.setStart(tn, i); r.setEnd(tn, i + 3); getSelection().removeAllRanges(); getSelection().addRange(r); document.querySelector('#mk').dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); p.blur(); return JSON.stringify(S.blocks['${tId}'].segs.map(s => s.v)); })()`) === JSON.stringify(['remove outliers of ', 'df', ' using IQR']), 'selection "df " becomes node "df" (space kept outside)');
+  const sel = (w, n) => `const e = editorOf('${tId}'); let pos = -1; e.state.doc.descendants((x, p) => { if (x.isText && x.text.includes('${w}')) pos = p + x.text.indexOf('${w}'); }); e.view.focus(); e.commands.setTextSelection({ from: pos, to: pos + ${n} });`;
+  check(await A.ev(`(async()=>{ await until(() => editorOf('${tId}') && text(S.blocks['${tId}']).includes('IQR')); ${sel('df', 3)}
+    await until(() => document.querySelector('.bubble .mk')); document.querySelector('.bubble .mk').click(); return JSON.stringify(segs('${tId}').map(s => s.v)); })()`) === JSON.stringify(['remove outliers of ', 'df', ' using IQR']), 'selection "df " becomes node "df" (space kept outside), from the selection toolbar');
+  await A.ev(`(async()=>{ ${sel('IQR', 3)} await until(() => document.querySelector('.bubble .fmt-bold')); document.querySelector('.bubble .fmt-bold').click(); const e2 = editorOf('${tId}'); e2.commands.blur(); e2.view.dom.dispatchEvent(new FocusEvent('blur')); return 1; })()`);
+  check(await B.ev(`until(() => el('${tId}')?.querySelector('.prompt strong')?.textContent === 'IQR' && text(S.blocks['${tId}']) === 'remove outliers of df using IQR')`), 'bold from the toolbar syncs, and the prompt text the model sees is unchanged');
+  await A.ev(`(() => { SOURCE = null; return 1; })()`);
   await A.ev(`(async()=>{ SOURCE = null; const l = acts('link')[0]; const b = S.blocks[l.tgt.b]; b.del = true; put('blocks', b); window.__c0 = __calls; await commitCode(l.src.b, 'df = df.dropna()', 'edit code'); })()`);
   check(await A.ev(`__calls === __c0`), 'link to a deleted block makes no LLM call');
 

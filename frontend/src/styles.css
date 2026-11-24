@@ -28,6 +28,7 @@ body{margin:0;font:400 16px/1.5 var(--font);color:var(--ink);background:var(--gr
 .ic{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .grow{flex:1}.muted{color:var(--mut)}
 [hidden]{display:none!important}
+p{text-wrap:pretty}
 
 /* ---------- controls ---------- */
 button{font:inherit;color:inherit;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;
@@ -55,6 +56,19 @@ header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px
 #pystat[data-s=ok]::before{background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
 #pystat[data-s=err]{color:var(--err)}
 #pystat[data-s=err]::before{background:var(--err);box-shadow:0 0 0 3px var(--err-soft)}
+.brand,#me,#conn,#pystat{white-space:nowrap}
+#morebtn{padding:7px 9px}
+#morebtn .ic{width:18px;height:18px}
+/* the session menu sits under the … button at the header's right edge */
+#more{position:fixed;inset:58px 20px auto auto;margin:0;min-width:220px;padding:6px;display:none;flex-direction:column;gap:2px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-3);color:var(--ink)}
+#more:popover-open{display:flex;animation:pop .16s var(--ease)}
+#more button{justify-content:flex-start;border-color:transparent;background:transparent;padding:8px 10px}
+#more button:hover{background:var(--sunken)}
+#more #reset{color:var(--err)}
+#more hr{width:100%;margin:4px 0;border:0;border-top:1px solid var(--line)}
+.more-room{margin:0;padding:6px 10px 8px;font-size:13px;color:var(--mut);overflow-wrap:anywhere}
+.more-room code{font:500 12.5px var(--mono);color:var(--ink-2)}
 
 /* ---------- layout ---------- */
 main{display:grid;grid-template-columns:minmax(0,1fr) 440px;gap:28px;padding:28px 28px 72px;align-items:start;max-width:1720px;margin:0 auto}
@@ -81,6 +95,9 @@ aside{position:sticky;top:90px;display:flex;flex-direction:column;height:calc(10
 .newtag{position:absolute;top:-11px;left:14px;z-index:1;padding:1px 9px;font-size:12px;font-weight:600;color:var(--warn);background:var(--warn-soft);
   border:1px solid color-mix(in srgb,var(--warn) 35%,white);border-radius:999px;cursor:pointer}
 .newtag:empty{display:none}
+.newtag .nt-act{margin-left:6px;padding:0 2px;font:inherit;color:var(--warn);background:none;border:0;border-radius:4px;
+  text-decoration:underline;text-underline-offset:2px}
+.newtag .nt-act:hover{color:var(--ink)}
 .grip{flex:none;display:inline-grid;place-items:center;width:18px;height:26px;margin-left:-8px;color:var(--faint);cursor:grab;border-radius:5px;opacity:0;transition:opacity .15s}
 .block:hover .grip{opacity:1}
 .grip:hover{background:var(--sunken);color:var(--ink)}
@@ -108,9 +125,17 @@ aside{position:sticky;top:90px;display:flex;flex-direction:column;height:calc(10
 
 /* prompt blocks */
 .phead{display:flex;align-items:center;gap:10px}
-.prompt{flex:1;min-width:0;outline:none;font-size:17px;font-weight:500;line-height:1.5;padding:5px 9px;border-radius:8px;min-height:38px;transition:background .15s}
+.pi{flex:1;min-width:0}
+.prompt{outline:none;font-size:17px;font-weight:500;line-height:1.5;padding:5px 9px;border-radius:8px;min-height:38px;transition:background .15s;white-space:pre-wrap;overflow-wrap:anywhere}
 .prompt:hover,.prompt:focus{background:var(--sunken)}
-.prompt:empty::before{content:attr(data-ph);color:var(--faint);font-weight:400}
+.prompt p{margin:0}
+.prompt p.is-editor-empty:first-child::before{content:attr(data-placeholder);float:left;height:0;pointer-events:none;color:var(--faint);font-weight:400}
+.prompt mark{background:#fde68a;color:inherit;border-radius:3px;padding:0 1px}
+.prompt code{font:500 .88em var(--mono);background:var(--hover);border-radius:4px;padding:1px 4px}
+/* collaborators' text cursors and selections (CollaborationCaret); --who is their user colour */
+.ccaret{position:relative;margin:0 -1px;border-left:2px solid var(--who);word-break:normal;pointer-events:none}
+.ccaret-l{position:absolute;bottom:100%;left:-2px;padding:0 6px;border-radius:5px 5px 5px 0;background:var(--who);color:#fff;font:500 11.5px/1.6 var(--font);white-space:nowrap;user-select:none}
+.csel{background:color-mix(in srgb,var(--who) 22%,transparent)}
 .av{width:26px;height:26px;border-radius:50%;color:#fff;font-size:12px;font-weight:600;display:inline-grid;place-items:center;flex:none;box-shadow:0 0 0 2px var(--surface)}
 .tools{display:flex;gap:2px}
 .tools button,.ctl button,.phdr button{border-color:transparent;background:transparent;color:var(--mut);padding:7px}
@@ -119,6 +144,13 @@ aside{position:sticky;top:90px;display:flex;flex-direction:column;height:calc(10
 .ctl{display:inline-flex;gap:2px;opacity:0;transition:opacity .15s}
 .block:hover .ctl,.block:focus-within .ctl{opacity:1}
 .ctl button{font-size:13px;padding:6px 9px}
+/* a heading's controls float in the space above its title (top padding + block gap), right-aligned:
+   they take no width from the title and never cover it */
+.hb .ctl{position:absolute;right:-4px;top:-14px;z-index:2;padding:2px;background:var(--surface);border:1px solid var(--line);
+  border-radius:10px;box-shadow:var(--sh-2);visibility:hidden;transition:opacity .15s,visibility .15s}
+.hb .ctl button{padding:4px 8px}
+.hb[data-d="0"] .ctl{top:-32px}
+.hb:hover .ctl,.hb:focus-within .ctl{visibility:visible}
 .busy:not(:empty){display:inline-flex;align-items:center;gap:8px;margin:8px 0 0 36px;padding:5px 12px 5px 10px;font-size:13.5px;font-weight:500;
   color:var(--warn);background:var(--warn-soft);border-radius:999px;animation:rise .2s var(--ease)}
 .busy .ic{animation:spin .9s linear infinite}
@@ -130,7 +162,7 @@ textarea.code{display:block;width:100%;margin-top:10px;font:400 14px/1.6 var(--m
 textarea.code:focus{outline:none;background:var(--surface);border-color:var(--accent-line);box-shadow:0 0 0 3px var(--accent-soft)}
 textarea.code::placeholder{color:var(--faint)}
 .runbar{display:flex;align-items:center;gap:8px;margin-top:10px}
-kbd{font:500 11px/1 var(--mono);padding:3px 5px;border:1px solid currentColor;border-radius:5px;opacity:.55}
+kbd{font:500 11px/1 var(--mono);padding:3px 5px;border:1px solid color-mix(in srgb,currentColor 35%,transparent);border-radius:5px}
 button.gen,button.p2c{padding:7px 10px 7px 11px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-color:var(--accent-line)}
 button.gen:hover,button.p2c:hover{background:#dfe7fa;border-color:var(--accent)}
 .ncount{font-size:11.5px;font-weight:600}
@@ -191,11 +223,21 @@ i[data-unlink]{cursor:pointer;box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px va
 .ins{background:#ddf2e5;color:#14532d}
 
 /* wiki */
-#srcbar:not(:empty){display:flex;align-items:center;gap:10px;margin:0 2px 10px;padding:9px 8px 9px 12px;font-size:13.5px;line-height:1.4;
-  color:#fff;background:var(--ink);border-radius:10px;animation:rise .2s var(--ease)}
+/* source bar: sticky over the tree while you look for a target */
+#srcbar:not(:empty){position:sticky;top:0;z-index:2;display:flex;flex-direction:column;gap:8px;margin:0 2px 10px;padding:9px 8px 10px 12px;
+  font-size:13.5px;line-height:1.4;color:#fff;background:var(--ink);border-radius:10px;box-shadow:var(--sh-2);animation:rise .2s var(--ease)}
+.sb-top{display:flex;align-items:center;gap:10px}
 #srcbar code{font:600 13px var(--mono);background:rgba(255,255,255,.14);border-radius:5px;padding:1px 6px}
 #srcbar button{margin-left:auto;padding:5px;color:#fff;background:transparent;border-color:transparent}
 #srcbar button:hover{background:rgba(255,255,255,.16)}
+.sb-mechs{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:0;padding-left:26px}
+.sb-mechs div{display:contents}
+.sb-mechs dt{display:inline-flex;align-items:center;gap:5px;font-weight:600;color:color-mix(in srgb,var(--c) 40%,white)}
+.sb-mechs dt .ic{width:14px;height:14px}
+.sb-mechs dd{margin:0;color:rgba(255,255,255,.8)}
+.sb-hint{margin:0;padding-left:26px;font-size:12.5px;color:rgba(255,255,255,.7)}
+.pane-b:has(#wiki.picking) .legend{display:none}
+.vh{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .legend{display:flex;flex-wrap:wrap;gap:4px 14px;padding:0 8px}
 .lg{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:600;color:var(--c);cursor:help}
 .lg .ic{width:14px;height:14px}
@@ -212,12 +254,15 @@ i[data-unlink]{cursor:pointer;box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px va
 .fold{display:inline-grid;place-items:center;width:20px;height:20px;color:var(--mut);cursor:pointer;border-radius:5px}
 .fold:hover{background:var(--line);color:var(--ink)}
 .wtext{flex:1;min-width:0;cursor:pointer}
-.pills{display:none;flex-basis:100%;justify-content:flex-end;gap:6px;padding:2px 0}
+/* picking: one small icon per mechanism the row accepts, at the row's end */
+.pills{display:none;margin-left:auto;gap:3px}
 #wiki.picking .pills{display:inline-flex}
-.pill{gap:5px;padding:3px 10px 3px 8px;font-size:12.5px;font-weight:600;color:var(--c);border:1px solid color-mix(in srgb,var(--c) 40%,white);
-  background:color-mix(in srgb,var(--c) 7%,white);border-radius:999px}
-.pill:hover{color:#fff;background:var(--c);border-color:var(--c)}
-.pill .ic{width:14px;height:14px}
+.pill{width:28px;height:28px;padding:0;color:var(--c);border:1px solid color-mix(in srgb,var(--c) 35%,white);
+  background:color-mix(in srgb,var(--c) 8%,white);border-radius:8px}
+.pill:hover,.pill:focus-visible{color:#fff;background:var(--c);border-color:var(--c)}
+.pill .ic{width:15px;height:15px}
+#wiki.picking .wrow.nope{opacity:.45}
+#wiki.picking .wrow.nope:hover{background:none}
 
 /* messages */
 .msg{padding:10px;border-radius:10px;font-size:14px;cursor:pointer;transition:background .12s}
@@ -241,9 +286,14 @@ i[data-unlink]{cursor:pointer;box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px va
 .empty{padding:6px 8px;font-size:14px;line-height:1.55;color:var(--mut)}
 
 /* floating + overlays */
-#mk{position:absolute;z-index:20;gap:6px;padding:6px 13px 6px 10px;font-size:13.5px;font-weight:600;color:#fff;background:var(--ink);border:none;border-radius:999px;box-shadow:var(--sh-2);animation:pop .16s var(--ease)}
-#mk:hover{background:#36363d}
-#mk[hidden]{display:none}
+/* selection toolbar (Fig. 4a): formatting, then Make node */
+.bubble{z-index:20;display:flex;align-items:center;gap:2px;padding:4px;background:var(--ink);border-radius:10px;box-shadow:var(--sh-2);animation:pop .16s var(--ease)}
+.bubble button{min-width:32px;height:32px;padding:0 8px;border:none;background:transparent;color:#e8e8ec;font-size:14px}
+.bubble button:hover,.bubble button[aria-pressed=true]{background:#3a3a42;color:#fff}
+.bubble .fmt-bold{font-weight:700}.bubble .fmt-italic{font-style:italic;font-family:Georgia,serif}
+.bubble .fmt-underline{text-decoration:underline}.bubble .fmt-strike{text-decoration:line-through}.bubble .fmt-code{font:500 12.5px var(--mono)}
+.bubble .bsep{width:1px;height:20px;margin:0 4px;background:#4a4a52}
+.bubble .mk{gap:6px;padding:0 12px 0 9px;font-weight:600;color:#fff}
 #join{min-height:100vh;display:grid;place-items:center;padding:16px}
 #modal{position:fixed;inset:0;z-index:30;display:grid;place-items:center;padding:16px;background:rgba(24,24,28,.4);animation:fade .15s ease-out}
 #modal[hidden]{display:none}
@@ -274,13 +324,14 @@ i[data-unlink]{cursor:pointer;box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px va
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 
 /* ---------- smaller screens ---------- */
-@media (max-width:1180px){main{grid-template-columns:minmax(0,1fr) 380px;gap:20px;padding:20px 20px 64px}}
+@media (max-width:1180px){main{grid-template-columns:minmax(0,1fr) 380px;gap:20px;padding:20px 20px 64px} header{padding:10px 20px} .brand small,.me-l{display:none}}
 @media (max-width:880px){
   header{flex-wrap:wrap;padding:10px 16px;gap:8px}
   .brand small{display:none}
   main{grid-template-columns:1fr;padding:16px 16px 56px}
+  header{position:static}
   aside{position:static;height:auto;min-height:0}
-  .pane{flex:none}
+  .pane,#wikiCard,#msgCard{flex:none}
   .pane-b{max-height:60vh}
   .hb .ctl{display:none}
   .hb:focus-within .ctl{display:inline-flex}
@@ -290,4 +341,14 @@ i[data-unlink]{cursor:pointer;box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px va
   .ctl{opacity:1}
   .runbar{flex-wrap:wrap}
   .gen kbd{display:none}
+}
+/* phones: the prompt gets the whole row, its tools drop to a row of their own */
+@media (max-width:600px){
+  .phead{flex-wrap:wrap;row-gap:2px}
+  .phead .tools{flex-basis:100%;justify-content:flex-end}
+  .phead .prompt{font-size:16px}
+  #cursors,#invite{font-size:0;gap:0;padding:8px 10px} /* icon only; the label stays for screen readers */
+  .hb .ctl{right:auto;left:calc(var(--d,0) * var(--ind) * -1)} /* from the editor's left edge, so it fits the screen */
+  .hb .ctl button{padding:4px 6px}
+  .hb .ctl-code{display:none}
 }

@@ -10,8 +10,8 @@ const UC = { Alice: 'var(--alice)', Bob: 'var(--bob)' };
 export const ucol = u => UC[u] || (u ? `hsl(${[...u].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7)} 55% 42%)` : 'var(--ok)');
 
 export const MECH = {
-  refer:   { c: 'var(--refer)',   tip: 'Refer: rebuild MY source prompt from this prompt’s (or section’s) code + result' },
-  request: { c: 'var(--request)', tip: 'Request: ask the owner to finish this; my prompt updates when it is done and again whenever it changes' },
-  share:   { c: 'var(--share)',   tip: 'Share: push my source into this prompt or task (owner must accept)' },
-  link:    { c: 'var(--link)',    tip: 'Link: keep this node, prompt or section in sync with my source' },
+  refer:   { c: 'var(--refer)',   tip: 'Refer: rebuild MY source prompt from this prompt’s (or section’s) code + result', does: 'rebuild my prompt from the target' },
+  request: { c: 'var(--request)', tip: 'Request: ask the owner to finish this; my prompt updates when it is done and again whenever it changes', does: 'ask its owner to finish it; mine follows' },
+  share:   { c: 'var(--share)',   tip: 'Share: push my source into this prompt or task (owner must accept)', does: 'offer my source to its owner' },
+  link:    { c: 'var(--link)',    tip: 'Link: keep this node, prompt or section in sync with my source', does: 'keep both in sync' },
 };
