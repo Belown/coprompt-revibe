@@ -10,7 +10,7 @@ import * as Y from 'yjs';
 const PORT = 18787, DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-sync-')), ORIGIN = 'http://localhost:8000';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const start = async () => {
-  const p = spawn(process.execPath, ['server.js'], { env: { ...process.env, PORT, DATA_DIR, DEEPSEEK_API_KEY: 'not-a-real-key', ANTHROPIC_API_KEY: '', LLM_ACCESS_CODE: 'letmein', MAX_ROOM_BYTES: 50000 }, stdio: 'inherit' });
+  const p = spawn(process.execPath, ['server.js'], { env: { ...process.env, PORT, DATA_DIR, DEEPSEEK_API_KEY: 'not-a-real-key', ANTHROPIC_API_KEY: '', LLM_ACCESS_CODE: 'letmein', MAX_ROOM_BYTES: 50000, MAX_ROOMS: 3, MAX_CONN_PER_ROOM: 5 }, stdio: 'inherit' });
   for (let i = 0; i < 50; i++) { try { await fetch(`http://localhost:${PORT}/health`); return p; } catch { await sleep(100); } }
   throw new Error('server did not start');
 };
@@ -24,10 +24,14 @@ const seed = tag => ({ blocks: { [tag]: { id: tag, upd: 0 } }, actions: {} });
 
 // a room saved before prompts were Y.js: its text is in the blocks' segs only
 fs.writeFileSync(path.join(DATA_DIR, 'legacy.json'), JSON.stringify({ epoch: 0, S: { blocks: { p1: { id: 'p1', kind: 'p', upd: 1, segs: [{ t: 'text', v: 'old prompt' }] } }, actions: {} } }));
+// a room nobody has used for 8 days: deleted when the server starts (ROOM_TTL_DAYS defaults to 7)
+const days = d => new Date(Date.now() - d * 86400000), OLD = path.join(DATA_DIR, 'old.json');
+fs.writeFileSync(OLD, JSON.stringify({ epoch: 0, S: { blocks: {}, actions: {} } })); fs.utimesSync(OLD, days(8), days(8));
 let srv = await start();
 try {
   const h = await fetch(`http://localhost:${PORT}/health`);
   assert.equal(h.status, 200);
+  assert.ok(!fs.existsSync(OLD), 'a room unused for 7 days is deleted at start');
 
   await assert.rejects(client('Eve', 'https://evil.example').open, 'foreign origin is refused');
   { // legacy room: the server turns its prompts' segs into Y.js text when it opens the room
@@ -103,6 +107,26 @@ try {
   await sleep(200);
   assert.equal(A.inbox.filter(m => m.t === 'put').length, 0, 'stale-epoch put is dropped');
   assert.equal(B.ws.readyState, WebSocket.CLOSED, 'a malformed put closes the connection');
+
+  // the room cap (MAX_ROOMS = 3 here): a new room deletes the least recently used idle one
+  await sleep(1200); // t1 is on disk
+  fs.utimesSync(path.join(DATA_DIR, 'legacy.json'), days(1), days(1));
+  const hi = async (room, user = 'Cap') => {
+    const w = new WebSocket(`ws://localhost:${PORT}/?room=${room}&user=${user}`, { origin: ORIGIN });
+    await new Promise(r => w.on('open', r)); w.send(JSON.stringify({ t: 'hello', seed: seed('c') }));
+    await new Promise(r => w.once('message', r)); return w;
+  };
+  const files = () => fs.readdirSync(DATA_DIR).filter(f => f.endsWith('.json')).sort();
+  const c1 = await hi('cap1'); c1.close(); await sleep(300);
+  assert.deepEqual(files(), ['cap1.json', 'legacy.json', 't1.json']);
+  const c2 = await hi('cap2');
+  assert.ok(!files().includes('legacy.json') && files().includes('t1.json'), 'at the cap, the least recently used idle room makes space');
+  c2.close(); await sleep(300);
+  // a full session: the server says so (close 1013 + reason) instead of refusing the connection
+  const crowd = []; for (let i = 0; i < 5; i++) crowd.push(await hi('crowd', 'P' + i));
+  const extra = new WebSocket(`ws://localhost:${PORT}/?room=crowd&user=Six`, { origin: ORIGIN });
+  assert.deepEqual(await new Promise(r => extra.on('close', (code, why) => r([code, String(why)]))), [1013, 'session full']);
+  crowd.forEach(w => w.close());
 
   for (const c of [A, C]) c.ws.close();
   await sleep(300); // last client gone: room flushed to disk

@@ -5,6 +5,8 @@ import { outline } from './model.js';
 import { openModal } from './ui.js';
 import { emit } from './bus.js';
 import { API } from '../config.js';
+import { S } from './store.js';
+import { scenario } from './scenarios.js';
 
 export const MODEL = () => localStorage.getItem('cp_model') || 'deepseek-flash';
 const PROVIDER = () => MODEL().startsWith('claude') ? 'anthropic' : 'deepseek';
@@ -39,7 +41,7 @@ export async function llm(user, json) {
   if (window.__llmStub) return window.__llmStub(user, json); // e2e.mjs replaces the model with a stub
   if (!hasKey()) throw needKey();
   const system = `You are the code-generation engine of CoPrompt, a collaborative natural-language programming notebook.
-Environment: Python 3 in the browser (Pyodide) with pandas, numpy, matplotlib, scipy and scikit-learn (seaborn may be available). The dataset is the Kaggle Titanic training set at 'data/titanic.csv'.
+Environment: Python 3 in the browser (Pyodide) with pandas, numpy, matplotlib, scipy and scikit-learn (seaborn may be available). ${scenario(S?.scenario).data}
 Before a block runs, all code blocks above it run top to bottom in the same namespace, so their variables can be used directly.
 Never use Markdown code fences. ${json ? 'Reply with JSON only.' : 'Reply with raw Python code only.'}
 Notebook outline (the prompt wiki; [Name] = author):

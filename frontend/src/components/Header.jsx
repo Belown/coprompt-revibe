@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import qrcode from 'qrcode-generator';
 import Icon from './Icon.jsx';
 import { Avatar } from './bits.jsx';
-import { ui, resetDemo, setCursors } from '../lib/store.js';
+import { S, ui, resetDemo, setCursors } from '../lib/store.js';
+import { scenario } from '../lib/scenarios.js';
 import { ME, OTHER } from '../lib/util.js';
 import { hasKey, openSettings } from '../lib/llm.js';
 import { ask, toast, openModal } from '../lib/ui.js';
@@ -41,12 +42,13 @@ function InviteBody({ url }) {
   </div>;
 }
 const invite = () => openModal({ title: 'Invite to this session', node: <InviteBody url={inviteUrl()} />, ok: 'Done', cancel: null });
-const newSession = () => { const q = new URLSearchParams(location.search); q.set('room', newRoom()); window.open('?' + q, '_blank'); };
+// a new session opens the join screen in a new tab, where a topic is picked (the name is remembered)
+const newSession = () => window.open(location.pathname, '_blank');
 
 export default function Header() {
   const key = hasKey();
   const reset = async () => {
-    if (await ask('Clears the shared notebook in every open window and restores the Titanic scenario. This cannot be undone.', { title: 'Reset the demo?', ok: 'Reset notebook' })) resetDemo();
+    if (await ask(`Clears the shared notebook in every open window and restores the starting notebook of “${scenario(S.scenario).title}”. This cannot be undone.`, { title: 'Reset the demo?', ok: 'Reset notebook' })) resetDemo();
   };
   return <header>
     <img className="logo" src="../favicon.svg" alt="" width="28" height="28" />
@@ -64,7 +66,7 @@ export default function Header() {
     <div id="more" popover="auto" onClick={e => e.target.closest('button') && e.currentTarget.hidePopover()}>
       <p className="more-room">Session <code>{ROOM}</code></p>
       <button id="other" onClick={() => window.open(otherUrl(), OTHER, 'width=1100,height=900')}><Icon name="external" />Open as {OTHER}</button>
-      <button id="newsession" onClick={newSession} title="Open a new, empty session in a new tab"><Icon name="plus" />New session</button>
+      <button id="newsession" onClick={newSession} title="Start a new session in a new tab, with a topic of your choice"><Icon name="plus" />New session</button>
       <hr />
       <button id="reset" onClick={reset}><Icon name="reset" />Reset demo…</button>
     </div>

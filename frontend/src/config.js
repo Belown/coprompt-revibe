@@ -10,5 +10,6 @@ const isLocalhost = ['localhost', '127.0.0.1'].includes(location.hostname);
 export const SERVER = (isLocalhost && q.get('server')) || (isLocalhost ? `ws://${location.hostname}:8787` : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api`);
 export const LOCAL = q.get('local') === '1';
 export const ROOM = q.get('room') || 'default';
+export const TOPIC = q.get('topic') || 'titanic'; // the topic a NEW room starts with (lib/scenarios.js); an existing room keeps its own
 // the same backend over HTTP, for the LLM proxy (/llm)
 export const API = SERVER.replace(/^ws/, 'http');

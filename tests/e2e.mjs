@@ -272,6 +272,16 @@ try {
   await B.ev(INJECT);
   check(await B.ev(`until(() => el('${b2}')?.classList.contains('unseen') && el('${b2}').querySelector('.newtag').textContent === 'Updated by Alice · edit code')`), 'a change made while Bob was offline is highlighted when he returns');
   check(await B.ev(`until(() => document.querySelector('#toast').textContent.includes('while you were away'))`), 'Bob gets a “changed while you were away” notice');
+  // topics: a new session from the join screen picks one; the notebook and its data follow it
+  const W = await page(BASE.replace(/\?.*$/, '')); await sleep(1500);
+  await W.ev(`(async()=>{ const until = async f => { for (let i = 0; i < 100 && !f(); i++) await new Promise(r => setTimeout(r, 100)); }; await until(() => document.querySelectorAll('.topics input').length);
+    document.querySelector('input[name=user]').value = 'Wendy'; document.querySelector('.topics input[value=wine]').click(); document.querySelector('#join .primary').click(); return 1; })()`);
+  await sleep(2500);
+  check(await W.ev(`(async()=>{ for (let i = 0; i < 100 && !window.cp?.S; i++) await new Promise(r => setTimeout(r, 100));
+    return location.search.includes('topic=wine') && cp.S.scenario === 'wine' && cp.text(cp.ordered()[0]).startsWith('Wine'); })()`), 'join screen: a new session with the Wine topic starts from its outline');
+  check(await W.ev(`(async()=>{ for (let i = 0; i < 1500 && cp.ui.py.s === 'load'; i++) await new Promise(r => setTimeout(r, 100));
+    const id = cp.ordered().find(b => b.kind === 'p').id; await cp.run(id); return cp.S.blocks[id].out?.text.includes('alcohol'); })()`), 'its load block runs: scikit-learn’s wine data in the browser');
+  await W.kill();
   console.log('LLM calls (stubbed) in Alice:', await A.ev('__calls'));
   await A.kill(); await B.kill();
 } catch (e) { ok = false; console.log('ERROR', e.message); }

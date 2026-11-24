@@ -7,7 +7,8 @@ import { uid, ME, debounce } from './util.js';
 import { ydoc, awareness, b64, unb64, segs } from './ytext.js';
 import { toast } from './ui.js';
 import { local, ws } from './sync.js';
-import { LOCAL, ROOM } from '../config.js';
+import { LOCAL, ROOM, TOPIC } from '../config.js';
+import { SCENARIOS } from './scenarios.js';
 
 export let S = null;   // set by the first snapshot; main.jsx waits for `ready` before rendering
 let epoch;             // the room's reset counter (backend only); puts from an older epoch are dropped by the server
@@ -127,24 +128,17 @@ const status = s => { ui.conn = s; emit(); if (s !== 'reconnecting') T.send({ t:
 const goLocal = () => { T = local(onMsg, status); };
 if (LOCAL) goLocal(); else T = ws(onMsg, status, goLocal);
 
-export function seed() {
-  const S = { blocks: {}, actions: {} }; let pos = 0;
+// a new notebook for a topic (lib/scenarios.js); the room keeps its topic in S.scenario
+export function seed(topic = TOPIC) {
+  const id = SCENARIOS[topic] ? topic : 'titanic', S = { blocks: {}, actions: {}, scenario: id }; let pos = 0;
   const H = (text, level, author) => { const id = uid(); S.blocks[id] = { id, pos: pos += 1000, kind: 'h', level, text, author, upd: 0 }; };
   const P = (t, author, code) => {
     const id = uid(), segs = [{ t: 'text', v: t }];
     S.blocks[id] = { id, pos: pos += 1000, kind: 'p', segs, author, editor: author, code, out: null, upd: 0,
       hist: [{ ts: Date.now(), by: author, action: 'add prompt', segs, code }] };
   };
-  H('Titanic Survival — Exploratory Data Analysis', 1, 'Alice');
-  H('Data Preparation', 2, 'Alice');
-  P('load data/titanic.csv into df', 'Alice', "import pandas as pd\ndf = pd.read_csv('data/titanic.csv')\ndf.head()");
-  H('1. Deal with missing values in df', 3, 'Alice');
-  H('2. Encode categorical features in df', 3, 'Alice');
-  H('Feature Analysis', 2, 'Bob');
-  H('3. Feature transformation', 3, 'Bob');
-  H('4. Correlation analysis', 3, 'Bob');
-  H('5. Deal with outliers', 3, 'Alice');
+  for (const [k, ...a] of SCENARIOS[id].blocks) k === 'h' ? H(...a) : P(...a);
   return S;
 }
 export function hardReset(newS) { S = newS; initSeen(); ui.SOURCE = ui.TGTNODE = null; emit(); }
-export function resetDemo() { const n = seed(); hardReset(n); T.send({ t: 'reset', S: n }); }
+export function resetDemo() { const n = seed(S.scenario); hardReset(n); T.send({ t: 'reset', S: n }); } // the room's topic again

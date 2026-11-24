@@ -48,8 +48,13 @@ export function ws(onMsg, onStatus, onFail) {
     const timeout = setTimeout(() => sock.readyState === WebSocket.CONNECTING && sock.close(), 5000);
     sock.onopen = () => { clearTimeout(timeout); opened = true; delay = 1000; onStatus('connected'); };
     sock.onmessage = e => onMsg(JSON.parse(e.data));
-    sock.onclose = () => {
+    sock.onclose = e => {
       clearTimeout(timeout);
+      if (e.code === 1013) { // the server is full (backend/server.js): say so, then work in this browser only
+        toast(e.reason === 'session full' ? 'This session already has the most people it allows. You are working on your own copy in this browser.'
+          : 'The server has no space for another session right now. You are working in this browser only; try again later.', { ms: 12000 });
+        return onFail();
+      }
       if (!opened) return onFail();
       onStatus('reconnecting');
       setTimeout(open, delay * (0.5 + Math.random())); // jitter, so a server restart is not hit by everyone at once

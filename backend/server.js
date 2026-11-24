@@ -15,7 +15,8 @@ const DATA_DIR = path.resolve(env.DATA_DIR || './data');
 const ORIGINS = (env.ALLOWED_ORIGINS || 'https://coprompt-revibe.wangleishen.com,http://localhost:8000').split(',').map(s => s.trim());
 const MAX_MSG_BYTES = +env.MAX_MSG_BYTES || 2 * 1024 * 1024; // a block carries its outputs (plots) and history
 const MAX_CONN_PER_ROOM = +env.MAX_CONN_PER_ROOM || 20;
-const MAX_ROOMS = +env.MAX_ROOMS || 100;                    // rooms on disk; caps what an anonymous client can create
+const MAX_ROOMS = +env.MAX_ROOMS || 100;                    // rooms on disk; at the cap the least recently used idle one goes
+const ROOM_TTL_MS = (+env.ROOM_TTL_DAYS || 7) * 86400000;      // a room nobody has used for this long is deleted
 const MAX_ROOM_BYTES = +env.MAX_ROOM_BYTES || 20 * 1024 * 1024; // one room's JSON; bounds RAM and disk (MAX_ROOMS × this)
 const MSG_RATE = +env.MSG_RATE || 30;                         // messages per second per connection, sustained
 const MSG_BURST = +env.MSG_BURST || 200;                      // a reconnect replays every locally newer object at once
@@ -53,12 +54,34 @@ function initTexts(r) {
   }, 'server');
 }
 
+// Rooms on disk, with when each was last used: a room's file is written whenever it changes and when its last
+// client leaves, so its mtime is its last use. Idle = nobody connected to it now.
+function roomFiles() {
+  return fs.readdirSync(DATA_DIR).filter(f => f.endsWith('.json')).flatMap(f => {
+    try { return [{ name: f.slice(0, -5), file: path.join(DATA_DIR, f), used: fs.statSync(path.join(DATA_DIR, f)).mtimeMs }]; } catch { return []; }
+  });
+}
+const idle = f => !rooms.get(f.name)?.clients.size;
+function sweep() { // at start and hourly: delete rooms unused for ROOM_TTL_DAYS
+  for (const f of roomFiles()) if (f.used < Date.now() - ROOM_TTL_MS && idle(f)) {
+    fs.rmSync(f.file, { force: true }); console.log(`deleted room ${f.name}: unused since ${new Date(f.used).toISOString()}`);
+  }
+}
+
 function openRoom(name) {
   let r = rooms.get(name);
   if (r) return r;
   const file = path.join(DATA_DIR, name + '.json');
   const saved = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
-  if (!saved && (rooms.size >= MAX_ROOMS || fs.readdirSync(DATA_DIR).filter(f => f.endsWith('.json')).length >= MAX_ROOMS)) return null;
+  if (!saved) { // a new room: at the cap, make space by deleting the least recently used idle room
+    if (rooms.size >= MAX_ROOMS) return null;
+    const files = roomFiles();
+    if (files.length >= MAX_ROOMS) {
+      const lru = files.filter(idle).sort((a, b) => a.used - b.used)[0];
+      if (!lru) return null; // every room is in use
+      fs.rmSync(lru.file, { force: true }); console.log(`deleted room ${lru.name} to make space (least recently used)`);
+    }
+  }
   r = { name, file, epoch: saved?.epoch || 0, S: saved?.S || null, ydoc: new Y.Doc(), bytes: saved ? fs.statSync(file).size : 0, clients: new Set(), timer: null };
   if (saved?.y) Y.applyUpdate(r.ydoc, Buffer.from(saved.y, 'base64'));
   // every change reaches the other clients: a client's update (origin = its socket) and the server's own init
@@ -163,9 +186,12 @@ server.on('upgrade', (req, sock, head) => {
   const q = new URL(req.url, 'http://x').searchParams, name = q.get('room') || 'default';
   if (!ORIGINS.includes(req.headers.origin)) return refuse(sock, 403, 'Forbidden');
   if (!NAME.test(name)) return refuse(sock, 400, 'Bad Request');
-  if (rooms.get(name)?.clients.size >= MAX_CONN_PER_ROOM) return refuse(sock, 503, 'Room Full');
+  // full: accept and close at once with 1013 (try again later) and a reason, which the page can show; an HTTP
+  // refusal would only look like an unreachable server to it
+  const full = reason => wss.handleUpgrade(req, sock, head, ws => ws.close(1013, reason));
+  if (rooms.get(name)?.clients.size >= MAX_CONN_PER_ROOM) return full('session full');
   const room = openRoom(name);
-  if (!room) return refuse(sock, 503, 'Too Many Rooms');
+  if (!room) return full('server full');
   wss.handleUpgrade(req, sock, head, ws => {
     Object.assign(ws, { room, user: (q.get('user') || 'anon').slice(0, 40), b: null, busy: {}, alive: true, tokens: MSG_BURST, last: Date.now() });
     room.clients.add(ws);
@@ -188,13 +214,15 @@ server.on('upgrade', (req, sock, head) => {
   });
 });
 
+sweep();
+const sweeper = setInterval(sweep, 3600000);
 const heartbeat = setInterval(() => {
   for (const ws of wss.clients) { if (!ws.alive) { ws.terminate(); continue; } ws.alive = false; ws.ping(); }
 }, HEARTBEAT_MS);
 
 function shutdown(sig) {
   console.log(`${sig}: saving ${rooms.size} room(s) and exiting`);
-  clearInterval(heartbeat);
+  clearInterval(heartbeat); clearInterval(sweeper);
   for (const r of rooms.values()) flush(r);
   for (const ws of wss.clients) ws.close(1012, 'server restart'); // 1012: clients reconnect
   server.close(() => process.exit(0));

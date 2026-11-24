@@ -6,7 +6,7 @@ An unofficial reimplementation of **CoPrompt** (Feng, Yen et al., CHI '24): a no
 
 ## What it does
 
-A shared notebook of prompt blocks, each with the Python code an LLM generates from it. The code runs in the browser with Pyodide. The demo uses the Titanic dataset, as in the paper's user study.
+A shared notebook of prompt blocks, each with the Python code an LLM generates from it. The code runs in the browser with Pyodide. A new session starts from a topic, a classic dataset with five small tasks split between two people: Titanic (as in the paper's user study), Iris, Wine (as in the paper's figures) or Diabetes.
 
 - **Four mechanisms** (§6.2) for building on a collaborator's prompt. You pick a source node in your prompt and a target in the Prompt Wiki, then choose:
   - **refer**: rebuild your prompt from their code and result.
