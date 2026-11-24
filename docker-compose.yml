@@ -1,0 +1,14 @@
+# Sync backend only (the frontend is static, on GitHub Pages).
+#   cp backend/.env.example backend/.env   # then edit
+#   docker compose --env-file backend/.env up -d --build
+services:
+  sync:
+    build: ./backend
+    restart: unless-stopped
+    env_file: ./backend/.env
+    environment:
+      DATA_DIR: /data
+    ports:
+      - "127.0.0.1:${PORT:?set PORT in backend/.env and pass --env-file backend/.env}:${PORT}"
+    volumes:
+      - "${HOST_DATA_DIR:?set HOST_DATA_DIR in backend/.env and pass --env-file backend/.env}:/data"

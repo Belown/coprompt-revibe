@@ -4,36 +4,58 @@ A reimplementation of *CoPrompt: Supporting Prompt Sharing and Referring in Coll
 
 ## Run it
 
-A React app (Vite). Needs Node 20+.
+Two parts: `frontend/` (React + Vite, static) and `backend/` (Node + `ws`, the sync server). Needs Node 20+.
 
 ```
-cd coprompt-revibe
-npm install
-npm run dev          # http://localhost:5173/?user=Alice
+cd backend  && npm install && npm start     # sync server on :8787, rooms saved in backend/data/
+cd frontend && npm install && npm run dev   # http://localhost:8000
 ```
 
-1. Open `http://localhost:5173/?user=Alice`, then click **Open as Bob** to get a second window. Put the two windows side by side. The windows sync with each other through `BroadcastChannel`.
-2. Click **API key** and paste a DeepSeek key. It is stored in localStorage and shared by both windows. The default model is `deepseek-flash` (thinking disabled, for speed). In the same dialog you can switch to `deepseek-v4-pro`, or enter any `claude-…` model name together with an Anthropic key.
+1. Open `http://localhost:8000`, enter a name and a session (room) name, and start. **Invite** copies a link to the session; whoever opens it picks a name and joins the same notebook, from any browser or device. **New session** opens a fresh notebook in a new tab. Rooms are independent. The scenario is written for Alice and Bob, but any number of people can join a room.
+2. Click **API key** and paste a DeepSeek key. It is stored in this browser's localStorage only and never goes through the sync server. The default model is `deepseek-flash` (thinking disabled, for speed). In the same dialog you can switch to `deepseek-v4-pro`, or enter any `claude-…` model name together with an Anthropic key.
 3. The first load fetches Pyodide, pandas, sklearn and matplotlib from the CDN, which takes about 20–40 s. Wait until the header says "Python: ready".
-4. **Reset demo** restores the scenario in both windows.
+4. **Reset demo** restores the scenario for everyone in the room.
+
+The header shows the connection: **Connected** (through the server), **Reconnecting…** (edits are kept and sent once it is back), or **Local mode**.
+
+**With and without the backend.** With it, everyone in a room syncs across browsers and devices, and the room survives reloads and server restarts. Without it (the backend is unreachable on the first connect, or the URL has `?local=1`), the app falls back to the old mode: `BroadcastChannel` + localStorage, so only windows of *one* browser sync (**Open as Bob** gives you the second window). URL parameters: `?user=`, `?room=`, `?local=1`, and `?server=wss://…` (overrides the backend for one session). The backend address is set in `frontend/src/config.js`.
 
 The page needs an internet connection, for the CDN and the API.
 
-## Deploy to GitHub Pages
+## Deploy
 
-The build is fully static (no backend). `npm run build` writes `dist/` with relative URLs, so it works from any folder. The workflow in `.github/workflows/pages.yml` builds and publishes it on every push to `main`: set **Settings → Pages → Source** to **GitHub Actions**, push, then open `https://<you>.github.io/<repo>/?user=Alice`.
+- **Frontend → GitHub Pages.** `.github/workflows/pages.yml` builds `frontend/` and publishes `frontend/dist` on every push to `main` that touches `frontend/`. Set **Settings → Pages → Source** to **GitHub Actions**, and **Custom domain** to `coprompt.wangleishen.com` (the build also ships `frontend/public/CNAME`). The site talks to `wss://api.coprompt.wangleishen.com`.
+- **Backend → any Docker host.** `cp backend/.env.example backend/.env`, edit it (every variable is explained there), then `docker compose --env-file backend/.env up -d --build`. The port is bound to `127.0.0.1` only, so a reverse proxy or tunnel must terminate TLS for `api.coprompt.wangleishen.com` and forward WebSocket upgrades. Room data is one JSON file per room in `HOST_DATA_DIR`. On SIGTERM the server writes every room before it exits. `GET /health` returns `{ok, rooms, clients}`.
+- **Never commit an API key or `.env`.** Each viewer pastes their own key in **API key**, and it is sent only to the provider. DeepSeek and Anthropic both accept browser calls.
+- The sync server has no authentication: anyone who knows a room name and opens the page from an allowed origin can edit that room. Use unguessable room names (the default is random) for anything private.
 
-- **Never commit an API key.** Each viewer pastes their own in **API key**. It stays in that browser's localStorage and is sent only to the provider. DeepSeek and Anthropic both accept browser calls from `github.io`.
-- **Collaboration is still same-browser only.** BroadcastChannel connects windows of one browser on one machine, which is fine for a projector demo. Real multi-device collaboration needs a hosted sync service, which GitHub Pages cannot run itself. The paper used Hocuspocus + Firebase; Firebase or a Y.js provider would be the options.
+### Sync protocol (`backend/server.js`, `frontend/src/lib/sync.js`)
+
+| Client → server | Server → client |
+|---|---|
+| `hello {seed}`, sent on every (re)connect. The seed is used only if the room is empty: the server alone decides. | `snapshot {S, epoch}`, followed by the others' current `presence` and `busy` |
+| `put {kind, obj, epoch}`: one block or action | `put {kind, obj}` to the others. To the sender only if its write lost (then it carries the winning object). |
+| `presence {b}` / `busy {id, label}` | `presence {user, b}` / `busy {id, label, user}`, cleared for a user whose connection drops |
+| `reset {S}` | `reset {S, epoch}` to everyone, the sender included |
+
+**Conflicts:** last-writer-wins per object (a block or an action). `obj.upd` is a per-object hybrid clock, `max(now, last seen upd + 1)`. The server keeps a write only if its `upd` is strictly greater than the stored one; otherwise it sends the winner back. So an edit made after seeing a collaborator's version always wins, even from a device whose clock is behind, and truly concurrent edits go to the higher timestamp. **Reset** bumps the room's `epoch`. Puts from an older epoch are dropped, so a stale window cannot bring back blocks of the old notebook. **Reconnect:** the client takes the new snapshot and resends every object it holds with a newer `upd` (edits made while disconnected). If the epoch changed in the meantime, it takes the snapshot as is.
 
 ## Code structure
 
 ```
-src/
-  main.jsx, App.jsx        entry; App wires global listeners and the window.cp test hook
+backend/
+  server.js                WebSocket sync server: rooms, LWW, persistence, limits, /health
+  smoke-test.mjs           npm test: protocol checks against a real server
+  Dockerfile, .env.example
+docker-compose.yml         backend only
+tests/e2e.mjs              two-window headless test (run from frontend/: npm run e2e)
+frontend/src/
+  config.js                backend URL, ?room=, ?local=
+  main.jsx, App.jsx        entry (join screen when ?user= is missing); App wires global listeners and the window.cp test hook
   lib/                     no React in here: state and logic
     bus.js                 change counter; React subscribes with useSyncExternalStore
-    store.js               shared notebook S, BroadcastChannel sync, presence/busy, "seen" record, seed/reset
+    store.js               shared notebook S, put/LWW, presence/busy, "seen" record, seed/reset, reconnect merge
+    sync.js                transports: WebSocket to the backend, BroadcastChannel + localStorage fallback
     model.js               read-only views: ordered, text, label, members (heading → section), provider, codeAbove, …
     templates.js           Fig. 12–15 templates (+ Fig. 14–15 few-shot examples) and our refer/share/explain/describe ones
     llm.js                 DeepSeek / Anthropic client, settings dialog
@@ -48,7 +70,7 @@ src/
     Wiki                                                Prompt Wiki (Fig. 3b)
     Messages                                            message panel (Fig. 3c)
     panels/ExplainPanel, HistoryPanel, CommentsPanel   Fig. 3d, Fig. 3e, annotation
-    Header, Overlays (modal, toasts, Make node), bits (avatar, dots, chips, controls), Icon
+    Header, Join, Overlays (modal, toasts, Make node), bits (avatar, dots, chips, controls), Icon
 ```
 
 The library owns the state, and React re-renders on every change. Two places deliberately bypass React: the prompt contenteditable (so a collaborator's update never moves your caret) and the code textarea (uncontrolled, for the same reason).
@@ -93,7 +115,7 @@ The library owns the state, and React re-renders on every change. Two places del
 |---|---|---|
 | GPT-4 via OpenAI | DeepSeek (`deepseek-flash`, OpenAI-compatible API; Claude optional), called directly from the browser | The original model is a moving target anyway. Using the same templates keeps the comparison fair-ish. |
 | Next.js + React + TypeScript, LLM calls through a server-side route | Vite + React, plain JavaScript, LLM calls from the browser | No server is needed (each viewer brings their own key). JavaScript kept the port from the single-file prototype small. |
-| TipTap/ProseMirror + Y.js CRDT + Hocuspocus server + Firebase RTDB/Firestore | `BroadcastChannel` + localStorage, with per-object last-writer-wins | No server is needed for a classroom demo. **It only works for windows in one browser on one machine.** Concurrent typing in the *same* prompt is not merged. |
+| TipTap/ProseMirror + Y.js CRDT + Hocuspocus server + Firebase RTDB/Firestore | A small WebSocket relay (Node + `ws`, one JSON file per room) with per-object last-writer-wins; `BroadcastChannel` + localStorage as the offline fallback | Enough for a demo across devices, at a few hundred lines instead of a CRDT stack. Concurrent typing in the *same* prompt is not merged. |
 | Rich-text toolbar (Fig. 3a: bold, highlight, …) | Plain contenteditable; nodes via **Make node** | Formatting is not part of any mechanism. |
 | Real-time cursors and text selections | Only "✎ Bob" on the block he is focused in | Cursor rendering inside contenteditable is a project of its own. |
 | Pyodide in a Web Worker | Also a Web Worker, but **Run re-executes every block above in a fresh namespace** | This is deterministic and avoids stale or partial kernel state, which the paper never specifies. |
@@ -125,8 +147,8 @@ The library owns the state, and React re-renders on every change. Two places del
 - **Turning a selection into a node inside contenteditable.** It has to be an atomic chip, and remote updates must not destroy the cursor of the person typing. A focused prompt takes remote changes unless you have typing that hasn't been saved yet (300 ms debounce). Two people typing in the *same* prompt at the same moment is still last-writer-wins. TipTap + Y.js hide this whole problem in the paper. In React, the prompt stays an uncontrolled element for this reason.
 - **"Automatic" synchronisation means an LLM call on every code change, for every link and open request.** Batching (one request call and one link call per change, as Fig. 14–15's list inputs suggest) helps, but cascades through chained links still add a call per hop. The paper presents this as a lightweight background check.
 - **Fulfilment detection is an LLM yes/no judgement** (Fig. 15). False positives silently rewrite a collaborator's code, and borderline cases flip between runs (see findings). It connects to P12's "slight loss of control". Keeping requests live after fulfilment makes this matter more, which is why **Stop tracking** exists.
-- **A bug in my own build:** two windows that start at the same time each seeded their own notebook, which duplicated every block. Real-time collaboration has many of these first-load and ordering edge cases, and the paper does not mention any.
-- **Scope-creep temptation:** the agent wanted to add a mock-LLM mode and a multi-user server. I kept it to what the paper claims.
+- **A bug in my own build:** two windows that start at the same time each seeded their own notebook, which duplicated every block. With the backend, the server alone decides whether a room gets seeded (the first `hello` into an empty room). Real-time collaboration has many of these first-load and ordering edge cases (clock skew between devices, edits made while disconnected, a reset that races an edit), and the paper does not mention any.
+- **Scope-creep temptation:** the agent wanted to add a mock-LLM mode. I kept it to what the paper claims. A sync server was added later, because a demo across devices needs one.
 
 ## Findings from testing with a real model (DeepSeek `deepseek-flash`, 2026-11-09)
 
@@ -141,6 +163,7 @@ The library owns the state, and React re-renders on every change. Two places del
 ## Verification
 
 - **Real Chrome, two tabs (Alice/Bob), DeepSeek** (single-file version, before the React port): every feature was exercised through the UI. That covers generate (add/edit), Run chaining with errors, plots and seaborn, sync and presence, wiki fold and jump, the message panel, history diff and restore, heading levels, delete, reset, and all four mechanisms including the share-while-offline pop-up and link rename propagation.
-- **Two-window headless test**: `npm run build && npm run preview`, then `npm run e2e` (it drives Edge over the DevTools protocol; `E2E_BASE` overrides the URL). It passes **52/52** on the React build with a **stubbed** LLM. It covers every mechanism, the few-shot templates, batched and persistent requests, notes on every mechanism, section links, whole-prompt sources, code-first prompts, comments, shared context on edit, prompt-only history versions, the offline highlight, unlink by icon, reordering, Reset, and Python execution. Pyodide comes from jsdelivr; when the CDN is unreachable, the test stops with a clear message instead of hanging.
+- **Backend**: `cd backend && npm test` starts a server and checks the protocol: the seed race; LWW, with the winner sent back to a losing writer; a late joiner's presence; reset epochs; malformed and foreign-origin input; and persistence across a restart. Checked by hand in headless Edge with three separate browser profiles in one room: edits and presence sync across browsers, and a third user joins with the current state. When the backend is killed and restarted, the page shows *Reconnecting…*, and an edit made in the meantime reaches the others. `?local=1` syncs two tabs, and an unreachable backend falls back to local mode.
+- **Two-window headless test**: in `frontend/`, `npm run build && npm run preview`, then `npm run e2e` (it drives Edge over the DevTools protocol; `E2E_BASE` overrides the URL). It passed **52/52** on the React build with a **stubbed** LLM, before the sync backend was added; it has not been re-run since (it now uses a fresh room per run, so it works with or without a running backend). It covers every mechanism, the few-shot templates, batched and persistent requests, notes on every mechanism, section links, whole-prompt sources, code-first prompts, comments, shared context on edit, prompt-only history versions, the offline highlight, unlink by icon, reordering, Reset, and Python execution. Pyodide comes from jsdelivr; when the CDN is unreachable, the test stops with a clear message instead of hanging.
 - **Not yet re-run with a real model:** the new and changed prompts (whole-prompt refer, prompt-from-code, few-shot link and request, batched inputs) were only checked with the stub. The real-model findings above predate them.
 - Rehearse the demo script once before class: the model's choices (variable names, trailing `dropna()`) change what each mechanism visibly does.
