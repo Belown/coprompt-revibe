@@ -304,6 +304,12 @@ i[data-unlink]{cursor:pointer;box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px va
 .dlg label{display:flex;flex-direction:column;gap:6px;font-size:13.5px;font-weight:500;color:var(--ink-2)}
 .dlg input{font:inherit;font-size:15px;padding:9px 12px;color:var(--ink);background:var(--surface);border:1px solid var(--line-2);border-radius:8px}
 .dlg input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+/* invite pop-up: QR code, then the link with Copy */
+.invite{display:flex;flex-direction:column;align-items:center;gap:14px}
+.invite .qr{width:200px;height:200px;padding:6px;background:#fff;border:1px solid var(--line);border-radius:12px;image-rendering:pixelated}
+.invite p.muted{text-align:center}
+.copyrow{display:flex;gap:8px;width:100%}
+.copyrow input{flex:1;min-width:0;font:13.5px var(--mono);color:var(--ink-2)}
 .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
 #toast{position:fixed;bottom:24px;left:50%;z-index:40;display:flex;flex-direction:column;align-items:center;gap:8px;width:max-content;max-width:calc(100vw - 32px);transform:translateX(-50%);pointer-events:none}
 #toast div.act{pointer-events:auto}
@@ -318,9 +324,14 @@ i[data-unlink]{cursor:pointer;box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px va
 @keyframes pop{from{opacity:0;transform:translateY(4px) scale(.96)}}
 /* ---------- live cursors ---------- */
 #cursors[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
-.cursor{position:fixed;left:0;top:0;z-index:9;margin:-3px 0 0 -3px;pointer-events:none;display:flex;align-items:flex-start;transition:transform .1s linear}
+.cursor{position:fixed;left:0;top:0;z-index:25;margin:-3px 0 0 -3px;pointer-events:none;display:flex;align-items:flex-start;transition:transform .1s linear}
 .cursor svg{width:18px;height:18px;fill:var(--who);stroke:#fff;stroke-width:1.5;stroke-linejoin:round;filter:drop-shadow(0 1px 1px rgba(28,28,31,.25))}
 .cursor span{margin:14px 0 0 -4px;padding:1px 7px;border-radius:999px;background:var(--who);color:#fff;font-size:12px;font-weight:500;line-height:1.5;white-space:nowrap}
+/* what a collaborator's pointer is on, and their clicks (above the sticky header, below dialogs) */
+.cursor-box{position:fixed;left:0;top:0;z-index:24;box-sizing:border-box;pointer-events:none;border:2px solid var(--who);border-radius:9px;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--who) 18%,transparent);transition:transform .1s linear,width .1s,height .1s}
+.cursor-click{position:absolute;left:3px;top:3px;width:28px;height:28px;margin:-14px 0 0 -14px;border:2px solid var(--who);border-radius:50%;animation:cclick .5s ease-out forwards}
+@keyframes cclick{from{transform:scale(.3);opacity:1}to{transform:scale(1.5);opacity:0}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 
 /* ---------- smaller screens ---------- */

@@ -1,9 +1,11 @@
+import { useMemo, useState } from 'react';
+import qrcode from 'qrcode-generator';
 import Icon from './Icon.jsx';
 import { Avatar } from './bits.jsx';
 import { ui, resetDemo, setCursors } from '../lib/store.js';
 import { ME, OTHER } from '../lib/util.js';
 import { hasKey, openSettings } from '../lib/llm.js';
-import { ask, toast } from '../lib/ui.js';
+import { ask, toast, openModal } from '../lib/ui.js';
 import { newRoom } from './Join.jsx';
 import { ROOM } from '../config.js';
 
@@ -16,13 +18,29 @@ const CONN_TIP = {
 
 // same room, server and mode, other user
 const otherUrl = () => { const q = new URLSearchParams(location.search); q.set('user', OTHER); return '?' + q; };
-// invite link: same session, no ?user=, so the invitee picks a name on the join screen
-async function invite() {
-  const q = new URLSearchParams(location.search); q.delete('user');
-  const url = `${location.origin}${location.pathname}?${q}`;
-  try { await navigator.clipboard.writeText(url); toast(`Invite link copied: ${url}`); }
-  catch { toast(`Invite link: ${url}`, { ms: 15000 }); }
+// invite: a pop-up with the link to copy and a QR code to scan. Same session, no ?user=, so the invitee picks a name.
+const inviteUrl = () => { const q = new URLSearchParams(location.search); q.delete('user'); return `${location.origin}${location.pathname}?${q}`; };
+function qrSrc(url) {
+  const qr = qrcode(0, 'M'); qr.addData(url); qr.make();
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true }));
 }
+function InviteBody({ url }) {
+  const src = useMemo(() => qrSrc(url), [url]), [copied, setCopied] = useState(false);
+  const copy = async e => {
+    const input = e.currentTarget.previousElementSibling;
+    try { await navigator.clipboard.writeText(url); setCopied(true); }
+    catch { input.select(); toast('Press Ctrl+C to copy the selected link.'); } // no clipboard access (e.g. plain http)
+  };
+  return <div className="invite">
+    <img className="qr" src={src} alt="QR code of the invite link" width="200" height="200" />
+    <p className="muted">Scan it with a phone camera, or send the link. Whoever opens it picks a name and joins session <b>{ROOM}</b>.</p>
+    <div className="copyrow">
+      <input readOnly value={url} aria-label="Invite link" onFocus={e => e.target.select()} />
+      <button onClick={copy}><Icon name={copied ? 'check' : 'copy'} />{copied ? 'Copied' : 'Copy'}</button>
+    </div>
+  </div>;
+}
+const invite = () => openModal({ title: 'Invite to this session', node: <InviteBody url={inviteUrl()} />, ok: 'Done', cancel: null });
 const newSession = () => { const q = new URLSearchParams(location.search); q.set('room', newRoom()); window.open('?' + q, '_blank'); };
 
 export default function Header() {
@@ -39,7 +57,7 @@ export default function Header() {
     <span id="pystat" data-s={ui.py.s}>{ui.py.text}</span>
     <button id="cursors" aria-pressed={ui.cursors} onClick={() => setCursors(!ui.cursors)}
       title="Show other people’s mouse pointers and share yours. Off: neither."><Icon name="pointer" />Live cursors</button>
-    <button id="invite" onClick={invite} title="Copy a link to this session for others to join"><Icon name="share" />Invite</button>
+    <button id="invite" onClick={invite} title="Invite others: a link to copy, or a QR code to scan"><Icon name="share" />Invite</button>
     <button id="settings" className={key ? undefined : 'needs'} onClick={() => openSettings()}><Icon name="key" />{key ? 'API key' : 'Add API key'}</button>
     {/* session and demo controls: used now and then, so they live behind one button (native popover: Esc / outside click close it) */}
     <button id="morebtn" popoverTarget="more" title="Session and demo" aria-label="Session and demo"><Icon name="more" /></button>

@@ -228,12 +228,29 @@ try {
   check(await A.ev(`(async()=>{ const id = byText('drop columns').id; el(id).querySelector('[aria-label=History]').click(); await until(() => el(id).querySelector('.hrow')); el(id).querySelector('.hrow').click(); return until(() => el(id).querySelector('.dcode')); })()`), 'history diff renders');
   check(await A.ev(`document.querySelectorAll('#wiki .dots i').length > 0 && document.querySelectorAll('#msgs .msg').length >= 6`), 'wiki dots + message panel populated');
 
+  // invite: a pop-up with a QR code and the link (same session, no user) to copy
+  check(await A.ev(`(async()=>{ document.querySelector('#invite').click(); await until(() => document.querySelector('#modal .qr'));
+    const m = document.querySelector('#modal'), url = m.querySelector('.copyrow input').value, ok = m.querySelector('.qr').src.startsWith('data:image/svg+xml')
+      && url.includes('room=') && !url.includes('user=') && !m.querySelector('.btns button:not(.primary)');
+    m.querySelector('.btns .primary').click(); await until(() => !document.querySelector('#modal .dlg')); return ok; })()`), 'Invite opens a pop-up with a QR code and the session link (no ?user=), closed with Done');
   // live cursors: opt-in on both sides; Alice's pointer over a block shows in Bob's window, and goes when she turns it off
   check(await B.ev(`!document.querySelector('.cursor')`), 'no live cursors until turned on');
   for (const P of [A, B]) await P.ev(`document.querySelector('#cursors').click(); 1`);
   await A.ev(`(async()=>{ await until(() => document.querySelector('#cursors').getAttribute('aria-pressed') === 'true'); const r = el('${encId}').getBoundingClientRect();
     el('${encId}').dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: r.left + 20, clientY: r.top + 10 })); return 1; })()`);
   check(await B.ev(`until(() => document.querySelector('.cursor span')?.textContent === 'Alice')`), 'Alice’s live cursor shows in Bob’s window');
+  // anywhere on the page: Alice points at and clicks the API key button in the header
+  await B.ev(`scrollTo(0, 0); 1`); // on a narrow window the header scrolls away, and a pointer on it has nowhere to show
+  await A.ev(`(()=>{ const t = document.querySelector('#settings'), r = t.getBoundingClientRect(), o = { bubbles: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+    t.dispatchEvent(new MouseEvent('mousemove', o)); t.dispatchEvent(new MouseEvent('mousedown', o)); return 1; })()`);
+  check(await B.ev(`until(() => { const b = document.querySelector('.cursor-box'), s = document.querySelector('#settings').getBoundingClientRect(); if (!b || !document.querySelector('.cursor-click')) return false;
+    const r = b.getBoundingClientRect(); return Math.abs(r.left + 3 - s.left) < 2 && Math.abs(r.width - 6 - s.width) < 2; })`), 'Alice’s pointer on the header’s API key button: Bob sees it boxed, and her click');
+  await A.ev(`document.querySelector('#settings').click(); 1`); // a dialog only Alice sees
+  check(await B.ev(`until(() => !document.querySelector('.cursor'))`), 'opening a dialog hides Alice’s pointer for Bob at once');
+  await A.ev(`(async()=>{ await until(() => document.querySelector('#modal .dlg')); document.querySelector('#modal .btns button').click();
+    await until(() => !document.querySelector('#modal .dlg')); await new Promise(r => setTimeout(r, 200));
+    const t = document.querySelector('#settings'), r = t.getBoundingClientRect(); t.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: r.left + 5, clientY: r.top + 5 })); return 1; })()`);
+  check(await B.ev(`until(() => document.querySelector('.cursor span')?.textContent === 'Alice')`), 'dialog closed: her pointer is back on her next move');
   await A.ev(`document.querySelector('#cursors').click(); 1`);
   check(await B.ev(`until(() => !document.querySelector('.cursor'))`), 'turning live cursors off removes the pointer for others');
 

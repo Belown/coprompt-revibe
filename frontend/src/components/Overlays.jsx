@@ -14,11 +14,12 @@ export function Modal() {
       onKeyDown={e => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); }}>
       {m.title && <h3>{m.title}</h3>}
       {m.body.map((t, i) => <p key={i}>{t}</p>)}
+      {m.node}
       {m.fields.map(f => f.label
         ? <label key={f.key}>{f.label}<input data-k={f.key} type={f.type} placeholder={f.placeholder} defaultValue={f.value} /></label>
         : <input key={f.key} data-k={f.key} placeholder={f.placeholder} defaultValue={f.value} aria-label={f.placeholder || m.title} />)}
       {m.note && <p className="muted">{m.note}</p>}
-      <div className="btns"><button onClick={() => done(false)}>{m.cancel || 'Cancel'}</button><button className="primary" onClick={() => done(true)}>{m.ok || 'OK'}</button></div>
+      <div className="btns">{m.cancel !== null && <button onClick={() => done(false)}>{m.cancel || 'Cancel'}</button>}<button className="primary" onClick={() => done(true)}>{m.ok || 'OK'}</button></div>
     </div>
   </div>;
 }

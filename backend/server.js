@@ -23,6 +23,7 @@ const HEARTBEAT_MS = +env.HEARTBEAT_MS || 30000;
 const SAVE_DELAY_MS = 1000;
 
 const NAME = /^[\w-]{1,64}$/;           // room names and object ids (uid() is base36)
+const ANCHOR = /^(id|b|w):[\w-]{1,64}$/; // a live pointer's anchor: an element id, a block, a wiki row
 const KINDS = ['blocks', 'actions'];
 const validState = S => S && typeof S === 'object' && KINDS.every(k => S[k] && typeof S[k] === 'object' && !Array.isArray(S[k]));
 
@@ -124,11 +125,11 @@ function onMessage(ws, m, size) {
       }
       return;
     }
-    case 'cursor': { // a live mouse pointer: block id + position in it as fractions; not stored, not replayed
-      const c = m.c, ok = c && typeof c === 'object' && typeof c.b === 'string' && NAME.test(c.b)
-        && [c.x, c.y].every(v => Number.isFinite(v) && v >= 0 && v <= 1);
+    case 'cursor': { // a live mouse pointer: an anchor element, the position in it as fractions, a click count; not stored
+      const c = m.c, ok = c && typeof c === 'object' && typeof c.a === 'string' && ANCHOR.test(c.a)
+        && [c.x, c.y].every(v => Number.isFinite(v) && v >= 0 && v <= 1) && (c.k == null || (Number.isSafeInteger(c.k) && c.k >= 0));
       ws.cur = true;
-      return others(ws, { t: 'cursor', user: ws.user, c: ok ? { b: c.b, x: c.x, y: c.y } : null });
+      return others(ws, { t: 'cursor', user: ws.user, c: ok ? { a: c.a, x: c.x, y: c.y, k: c.k || 0 } : null });
     }
     case 'busy': {
       if (typeof m.id !== 'string' || !NAME.test(m.id)) return;

@@ -110,7 +110,7 @@ awareness.on('update', (_, origin) => { if (origin !== 'remote') { awDirty = tru
 
 // Live mouse pointers (components/Cursors.jsx). Their own change counter, so ten moves a second from each
 // collaborator never re-render the notebook.
-export const CUR = {}; // user -> {b, x, y}: the block under the pointer and the position in it, as fractions of its box
+export const CUR = {}; // user -> {a, x, y, k}: anchor element, position in it as fractions of its box, click count
 const curSubs = new Set(); let curV = 0;
 export const onCursors = f => { curSubs.add(f); return () => curSubs.delete(f); };
 export const cursorsVersion = () => curV;

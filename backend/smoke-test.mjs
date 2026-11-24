@@ -70,9 +70,11 @@ try {
   const C = client('Carol'); await C.open; C.send({ t: 'hello', seed: seed('c') });
   assert.equal((await C.next('snapshot')).S.blocks.x.v, 'A');
   assert.equal((await C.next('presence')).user, 'Alice', 'late joiner sees current presence');
-  A.send({ t: 'cursor', c: { b: 'x', x: 0.5, y: 0.25 } });
-  assert.deepEqual(await C.next('cursor'), { t: 'cursor', user: 'Alice', c: { b: 'x', x: 0.5, y: 0.25 } });
-  A.send({ t: 'cursor', c: { b: 'x', x: 9, y: 0 } });
+  A.send({ t: 'cursor', c: { a: 'id:settings', x: 0.5, y: 0.25, k: 3 } });
+  assert.deepEqual(await C.next('cursor'), { t: 'cursor', user: 'Alice', c: { a: 'id:settings', x: 0.5, y: 0.25, k: 3 } });
+  A.send({ t: 'cursor', c: { a: 'q:"]<x>', x: 0.5, y: 0 } });
+  assert.equal((await C.next('cursor')).c, null, 'a cursor with a bad anchor is relayed as hidden');
+  A.send({ t: 'cursor', c: { a: 'b:x', x: 9, y: 0 } });
   assert.equal((await C.next('cursor')).c, null, 'an out-of-range cursor is relayed as hidden');
 
   // prompt text is Y.js: a seed's starting segs are put into the room's doc once, by the server
