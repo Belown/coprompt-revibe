@@ -1,5 +1,10 @@
 import { createRoot } from 'react-dom/client';
-import App from './App.jsx';
+import Join from './components/Join.jsx';
 import './styles.css';
 
-createRoot(document.getElementById('root')).render(<App />);
+const root = createRoot(document.getElementById('root'));
+if (!new URLSearchParams(location.search).get('user')) root.render(<Join />);
+else { // importing the app connects to the room; render once the shared notebook has arrived
+  const [{ default: App }, { ready }] = await Promise.all([import('./App.jsx'), import('./lib/store.js')]);
+  ready.then(() => root.render(<App />));
+}

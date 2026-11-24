@@ -4,6 +4,7 @@
 import { spawn } from 'node:child_process';
 const EDGE = process.env.E2E_BROWSER || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const BASE = process.env.E2E_BASE || 'http://localhost:8000/';
+const ROOM = '&room=e2e' + Date.now(); // a fresh notebook per run (also on the sync backend, when one is running)
 const proc = spawn(EDGE, ['--headless=new', '--disable-gpu', '--remote-debugging-port=9333',
   `--user-data-dir=${process.env.TEMP || '/tmp'}/cp_e2e_${Date.now()}`, 'about:blank'], { stdio: 'ignore' });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -12,7 +13,7 @@ const check = (c, m) => { nAll++; if (c) nPass++; console.log(c ? 'PASS' : 'FAIL
 
 async function page(url) {
   for (let i = 0; i < 50; i++) { try { await fetch('http://localhost:9333/json/version'); break; } catch { await sleep(200); } }
-  const t = await (await fetch(`http://localhost:9333/json/new?${url}`, { method: 'PUT' })).json();
+  const t = await (await fetch(`http://localhost:9333/json/new?${encodeURIComponent(url)}`, { method: 'PUT' })).json();
   const ws = new WebSocket(t.webSocketDebuggerUrl); await new Promise(r => ws.onopen = r);
   let n = 0; const pend = {};
   ws.onmessage = e => { const d = JSON.parse(e.data); if (pend[d.id]) { pend[d.id](d); delete pend[d.id]; } };
@@ -73,8 +74,8 @@ function helpers() {
 const INJECT = `(${stubLLM})(); (${helpers})(); 1`;
 
 try {
-  const A = await page(BASE + '?user=Alice'); await sleep(1500);
-  let B = await page(BASE + '?user=Bob'); await sleep(1500);
+  const A = await page(BASE + '?user=Alice' + ROOM); await sleep(1500);
+  let B = await page(BASE + '?user=Bob' + ROOM); await sleep(1500);
   for (const P of [A, B]) await P.ev(INJECT);
 
   // 1. Python execution of the seeded block
@@ -210,7 +211,7 @@ try {
   // 10. asynchronous case: Bob closes his window, Alice changes his block, Bob comes back → highlighted + notice
   await B.kill(); await sleep(500);
   await A.ev(`(async()=>{ const b = S.blocks['${b2}']; await commitCode('${b2}', b.code + '\\nprint(1)', 'edit code'); return 1; })()`);
-  B = await page(BASE + '?user=Bob'); await sleep(2000);
+  B = await page(BASE + '?user=Bob' + ROOM); await sleep(2000);
   await B.ev(INJECT);
   check(await B.ev(`until(() => el('${b2}')?.classList.contains('unseen') && el('${b2}').querySelector('.newtag').textContent === 'Updated by Alice · edit code')`), 'a change made while Bob was offline is highlighted when he returns');
   check(await B.ev(`until(() => document.querySelector('#toast').textContent.includes('while you were away'))`), 'Bob gets a “changed while you were away” notice');

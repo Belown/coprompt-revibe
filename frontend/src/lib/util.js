@@ -6,7 +6,8 @@ export function trimWs(s, a, z) { while (a < z && /\s/.test(s[a])) a++; while (z
 export const ME = new URLSearchParams(location.search).get('user') || 'Alice';
 export const OTHER = ME === 'Alice' ? 'Bob' : 'Alice';
 const UC = { Alice: 'var(--alice)', Bob: 'var(--bob)' };
-export const ucol = u => UC[u] || 'var(--ok)';
+// anyone beyond the paper's two: a stable hue from the name
+export const ucol = u => UC[u] || (u ? `hsl(${[...u].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7)} 55% 42%)` : 'var(--ok)');
 
 export const MECH = {
   refer:   { c: 'var(--refer)',   tip: 'Refer: rebuild MY source prompt from this prompt’s (or section’s) code + result' },

@@ -46,6 +46,10 @@ header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px
 .brand{display:flex;align-items:baseline;gap:8px;margin:0 8px 0 0;font-size:19px;font-weight:700;letter-spacing:-.02em}
 .brand small{font-size:13px;font-weight:500;letter-spacing:0;color:var(--mut)}
 #me{display:inline-flex;align-items:center;gap:8px;padding:3px 12px 3px 3px;border:1px solid var(--line);border-radius:999px;font-size:14px;font-weight:500}
+#conn{display:inline-flex;align-items:center;gap:8px;margin-right:6px;font-size:13.5px;color:var(--mut)}
+#conn::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--warn);box-shadow:0 0 0 3px var(--warn-soft)}
+#conn[data-s=connected]::before{background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
+#conn[data-s=local]::before{background:var(--mut);box-shadow:none}
 #pystat{display:inline-flex;align-items:center;gap:8px;margin-right:6px;font-size:13.5px;color:var(--mut)}
 #pystat::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--warn);box-shadow:0 0 0 3px var(--warn-soft)}
 #pystat[data-s=ok]::before{background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
@@ -236,6 +240,7 @@ i[data-unlink]{cursor:pointer;box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px va
 #mk{position:absolute;z-index:20;gap:6px;padding:6px 13px 6px 10px;font-size:13.5px;font-weight:600;color:#fff;background:var(--ink);border:none;border-radius:999px;box-shadow:var(--sh-2);animation:pop .16s var(--ease)}
 #mk:hover{background:#36363d}
 #mk[hidden]{display:none}
+#join{min-height:100vh;display:grid;place-items:center;padding:16px}
 #modal{position:fixed;inset:0;z-index:30;display:grid;place-items:center;padding:16px;background:rgba(24,24,28,.4);animation:fade .15s ease-out}
 #modal[hidden]{display:none}
 .dlg{display:flex;flex-direction:column;gap:14px;width:min(500px,100%);padding:22px 22px 18px;background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--sh-3);animation:rise .22s var(--ease)}
