@@ -9,3 +9,5 @@ const isLocalhost = ['localhost', '127.0.0.1'].includes(location.hostname);
 export const SERVER = q.get('server') || (isLocalhost ? `ws://${location.hostname}:8787` : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api`);
 export const LOCAL = q.get('local') === '1';
 export const ROOM = q.get('room') || 'default';
+// the same backend over HTTP, for the LLM proxy (/llm)
+export const API = SERVER.replace(/^ws/, 'http');

@@ -12,7 +12,7 @@ cd frontend && npm install && npm run dev   # blog at http://localhost:8000/, ap
 ```
 
 1. Open `http://localhost:8000/app/`, enter a name and a session (room) name, and start. **Invite** copies a link to the session; whoever opens it picks a name and joins the same notebook, from any browser or device. **New session** opens a fresh notebook in a new tab. Rooms are independent. The scenario is written for Alice and Bob, but any number of people can join a room.
-2. Click **API key** and paste a DeepSeek key. It is stored in this browser's localStorage only and never goes through the sync server. The default model is `deepseek-flash` (thinking disabled, for speed). In the same dialog you can switch to `deepseek-v4-pro`, or enter any `claude-…` model name together with an Anthropic key.
+2. **LLM key.** If the server has a key in `.env` (`DEEPSEEK_API_KEY`), nothing is needed: calls go through the server's proxy at `/api/llm`. Otherwise, or to use your own budget, click **API key** and paste a DeepSeek key; your own key always wins, is stored in this browser's localStorage only, and goes straight to the provider, never through the server. The default model is `deepseek-flash` (thinking disabled, for speed). In the same dialog you can switch to `deepseek-v4-pro`, or enter any `claude-…` model name together with an Anthropic key.
 3. The first load fetches Pyodide, pandas, sklearn and matplotlib from the CDN, which takes about 20–40 s. Wait until the header says "Python: ready".
 4. **Reset demo** restores the scenario for everyone in the room.
 
@@ -36,7 +36,8 @@ coprompt-revibe.wangleishen.com/api/    sync backend  WebSocket at /api/?room=�
 - **Deploy:** `cp .env.example .env`, edit it (every variable is explained there), then `docker compose up -d --build`. **Update:** `git pull && docker compose up -d --build`. There is no automatic deploy on push.
 - **Data:** one JSON file per room in `HOST_DATA_DIR`. On SIGTERM the server writes every room before it exits. `/api/health` returns `{ok, rooms, clients}`.
 - **Domain and TLS.** `coprompt-revibe.wangleishen.com` is one level below `wangleishen.com`, so Cloudflare's free Universal SSL certificate covers it when the record is proxied or tunnelled. Because the backend is same-origin, there is no separate API domain, and `ALLOWED_ORIGINS` only needs this domain (plus `http://localhost:8000` for development).
-- **Never commit an API key or `.env`.** Each viewer pastes their own key in **API key**, and it is sent only to the provider. DeepSeek and Anthropic both accept browser calls.
+- **LLM proxy** (`backend/llm.js`). With `DEEPSEEK_API_KEY` (and/or `ANTHROPIC_API_KEY`) set in `.env`, people without a key use the server's. The key stays on the server: it is never sent to browsers, and the provider's auth errors (which quote part of the key) are replaced. Guards: allowed Origin, an optional access code (`LLM_ACCESS_CODE`), a model allowlist, a `max_tokens` cap, a **daily cap for everyone** (`LLM_DAILY_LIMIT`, which bounds the bill), and a per-IP rate. The daily count is kept in memory, so a restart resets it. Anyone who can open the site can spend the shared budget unless an access code is set.
+- **Never commit an API key or `.env`.**
 - The sync server has no authentication: anyone who knows a room name and opens the page from an allowed origin can edit that room. Use unguessable room names (the default is random) for anything private.
 
 ### Sync protocol (`backend/server.js`, `frontend/src/lib/sync.js`)
@@ -55,6 +56,7 @@ coprompt-revibe.wangleishen.com/api/    sync backend  WebSocket at /api/?room=�
 ```
 backend/
   server.js                WebSocket sync server: rooms, LWW, persistence, limits, /health
+  llm.js                   LLM proxy (/llm): the server's key for people without one, with limits
   smoke-test.mjs           npm test: protocol checks against a real server
   Dockerfile
 frontend/
@@ -129,7 +131,7 @@ The library owns the state, and React re-renders on every change. Two places del
 | Paper | Revibe | Why |
 |---|---|---|
 | GPT-4 via OpenAI | DeepSeek (`deepseek-flash`, OpenAI-compatible API; Claude optional), called directly from the browser | The original model is a moving target anyway. Using the same templates keeps the comparison fair-ish. |
-| Next.js + React + TypeScript, LLM calls through a server-side route | Vite + React, plain JavaScript, LLM calls from the browser | No server is needed (each viewer brings their own key). JavaScript kept the port from the single-file prototype small. |
+| Next.js + React + TypeScript, LLM calls through a server-side route | Vite + React, plain JavaScript. LLM calls go from the browser with the user's own key, or through our small proxy with the server's key | Participants can try it without a key; with their own key nothing goes through the server. JavaScript kept the port from the single-file prototype small. |
 | TipTap/ProseMirror + Y.js CRDT + Hocuspocus server + Firebase RTDB/Firestore | A small WebSocket relay (Node + `ws`, one JSON file per room) with per-object last-writer-wins; `BroadcastChannel` + localStorage as the offline fallback | Enough for a demo across devices, at a few hundred lines instead of a CRDT stack. Concurrent typing in the *same* prompt is not merged. |
 | Rich-text toolbar (Fig. 3a: bold, highlight, …) | Plain contenteditable; nodes via **Make node** | Formatting is not part of any mechanism. |
 | Real-time cursors and text selections | Only "✎ Bob" on the block he is focused in | Cursor rendering inside contenteditable is a project of its own. |

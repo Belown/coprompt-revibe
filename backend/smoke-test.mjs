@@ -9,7 +9,7 @@ import WebSocket from 'ws';
 const PORT = 18787, DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-sync-')), ORIGIN = 'http://localhost:8000';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const start = async () => {
-  const p = spawn(process.execPath, ['server.js'], { env: { ...process.env, PORT, DATA_DIR }, stdio: 'inherit' });
+  const p = spawn(process.execPath, ['server.js'], { env: { ...process.env, PORT, DATA_DIR, DEEPSEEK_API_KEY: 'not-a-real-key', ANTHROPIC_API_KEY: '', LLM_ACCESS_CODE: 'letmein' }, stdio: 'inherit' });
   for (let i = 0; i < 50; i++) { try { await fetch(`http://localhost:${PORT}/health`); return p; } catch { await sleep(100); } }
   throw new Error('server did not start');
 };
@@ -27,6 +27,19 @@ try {
   assert.equal(h.status, 200);
 
   await assert.rejects(client('Eve', 'https://evil.example').open, 'foreign origin is refused');
+
+  // LLM proxy guards (nothing here reaches a provider)
+  const llm = (path, { origin = ORIGIN, code, body, method = 'POST' } = {}) => fetch(`http://localhost:${PORT}/llm${path}`,
+    { method, headers: { origin, 'content-type': 'application/json', ...(code && { 'x-access-code': code }) }, body: body && JSON.stringify(body) });
+  const info = await (await llm('', { method: 'GET' })).json();
+  assert.deepEqual(info.providers, { deepseek: true, anthropic: false }); assert.equal(info.code, true);
+  assert.equal((await llm('', { method: 'OPTIONS' })).headers.get('access-control-allow-origin'), ORIGIN, 'preflight');
+  const ok = { model: 'deepseek-flash', messages: [] };
+  assert.equal((await llm('/deepseek', { origin: 'https://evil.example', code: 'letmein', body: ok })).status, 403);
+  assert.equal((await llm('/deepseek', { body: ok })).status, 401, 'access code required');
+  assert.equal((await llm('/deepseek', { code: 'nope', body: ok })).status, 401);
+  assert.equal((await llm('/deepseek', { code: 'letmein', body: { ...ok, model: 'gpt-x' } })).status, 400, 'model allowlist');
+  assert.equal((await llm('/anthropic', { code: 'letmein', body: ok })).status, 503, 'no server key for that provider');
 
   const A = client('Alice'), B = client('Bob');
   await Promise.all([A.open, B.open]);

@@ -8,7 +8,7 @@ FROM node:22-alpine
 ENV NODE_ENV=production PORT=8787 DATA_DIR=/data
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY package.json server.js ./
+COPY package.json server.js llm.js ./
 RUN mkdir -p /data && chown node:node /data
 USER node
 VOLUME /data

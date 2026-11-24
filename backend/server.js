@@ -5,6 +5,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { WebSocketServer } from 'ws';
+import { llmRoute } from './llm.js';
 
 const env = process.env;
 const PORT = +env.PORT || 8787;
@@ -86,7 +87,9 @@ function onMessage(ws, m) {
 }
 
 const server = http.createServer((req, res) => {
-  if (req.method === 'GET' && req.url === '/health') {
+  const route = new URL(req.url, 'http://x').pathname;
+  if (route === '/llm' || route.startsWith('/llm/')) return llmRoute(req, res, route.slice(5) || null, ORIGINS);
+  if (req.method === 'GET' && route === '/health') {
     res.writeHead(200, { 'content-type': 'application/json' });
     return res.end(JSON.stringify({ ok: true, rooms: rooms.size, clients: wss.clients.size }));
   }
