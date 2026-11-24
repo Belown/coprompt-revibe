@@ -16,20 +16,29 @@ const CODE = env.LLM_ACCESS_CODE || '';
 const DAILY_LIMIT = +env.LLM_DAILY_LIMIT || 1000;  // calls per day (UTC), all users together: bounds the bill
 const PER_MIN = +env.LLM_PER_MIN || 60;            // calls per minute per IP (a seminar room may share one NAT IP)
 const MAX_TOKENS = +env.LLM_MAX_TOKENS || 16000;
-const MAX_BODY = 1024 * 1024;
+const MAX_BODY = 256 * 1024;                       // input tokens cost money too: the app's prompts are far smaller
+// fields the app sends; everything else (tools, web search, …) is dropped so the server's key can only do what the app does
+const FIELDS = {
+  deepseek: ['model', 'messages', 'max_tokens', 'thinking'],
+  anthropic: ['model', 'messages', 'system', 'max_tokens', 'output_config', 'fallbacks'],
+};
+const BETAS = ['server-side-fallback-2026-07-01'];
 
 const hash = s => crypto.createHash('sha256').update(String(s || '')).digest();
 const codeOk = c => !CODE || crypto.timingSafeEqual(hash(c), hash(CODE));
 
 let day = '', used = 0;
-const perIp = new Map(); // ip -> [window start, count]
+const perIp = new Map(), badCode = new Map(); // ip -> [window start, count]
+const over = (map, ip, ms, max) => {
+  const now = Date.now(), w = map.get(ip);
+  if (!w || now - w[0] > ms) { map.set(ip, [now, 1]); return false; }
+  return ++w[1] > max;
+};
 function spend(ip) {
   const today = new Date().toISOString().slice(0, 10);
-  if (today !== day) { day = today; used = 0; perIp.clear(); }
+  if (today !== day) { day = today; used = 0; perIp.clear(); badCode.clear(); }
   if (used >= DAILY_LIMIT) return 'The shared LLM budget for today is used up. Add your own API key under “API key”.';
-  const now = Date.now(), w = perIp.get(ip);
-  if (!w || now - w[0] > 60000) perIp.set(ip, [now, 1]);
-  else if (++w[1] > PER_MIN) return 'Too many LLM calls from this network; wait a minute.';
+  if (over(perIp, ip, 60000, PER_MIN)) return 'Too many LLM calls from this network; wait a minute.';
   used++;
   return null;
 }
@@ -63,16 +72,22 @@ export async function llmRoute(req, res, provider, origins) {
   if (req.method !== 'POST' || !p) return fail(404, 'not found');
   if (!allowed) return fail(403, 'origin not allowed');
   if (!p.key) return fail(503, `The server has no ${provider} key. Add your own API key under “API key”.`);
-  if (!codeOk(req.headers['x-access-code'])) return fail(401, 'Wrong or missing access code. Enter the code from the organizer under “API key”.');
+  const ip = clientIp(req);
+  if (badCode.get(ip)?.[1] >= 10 && Date.now() - badCode.get(ip)[0] < 600000) return fail(429, 'Too many wrong access codes; wait 10 minutes.');
+  if (!codeOk(req.headers['x-access-code'])) {
+    over(badCode, ip, 600000, 10); // ponytail: 10 guesses per IP per 10 min; the code should still be long and random
+    return fail(401, 'Wrong or missing access code. Enter the code from the organizer under “API key”.');
+  }
 
   let body;
   try { body = JSON.parse(await readBody(req)); } catch { return fail(400, 'bad request body'); }
   if (!body || !MODELS.includes(body.model)) return fail(400, `Model not offered by the server. Allowed: ${MODELS.join(', ')}.`);
-  const over = spend(clientIp(req));
-  if (over) return fail(429, over);
+  const spent = spend(ip);
+  if (spent) return fail(429, spent);
+  body = Object.fromEntries(FIELDS[provider].filter(k => k in body).map(k => [k, body[k]]));
   body.max_tokens = Math.min(+body.max_tokens || MAX_TOKENS, MAX_TOKENS);
 
-  const beta = provider === 'anthropic' && req.headers['anthropic-beta'];
+  const beta = provider === 'anthropic' && BETAS.includes(req.headers['anthropic-beta']) && req.headers['anthropic-beta'];
   try {
     const r = await fetch(p.url, {
       method: 'POST', signal: AbortSignal.timeout(180000), body: JSON.stringify(body),

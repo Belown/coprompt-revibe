@@ -18,7 +18,7 @@ cd frontend && npm install && npm run dev   # blog at http://localhost:8000/, ap
 
 The header shows the connection: **Connected** (through the server), **Reconnecting…** (edits are kept and sent once it is back), or **Local mode**.
 
-**With and without the backend.** With it, everyone in a room syncs across browsers and devices, and the room survives reloads and server restarts. Without it (the backend is unreachable on the first connect, or the URL has `?local=1`), the app falls back to the old mode: `BroadcastChannel` + localStorage, so only windows of *one* browser sync (**Open as Bob** gives you the second window). URL parameters: `?user=`, `?room=`, `?local=1`, and `?server=wss://…` (overrides the backend for one session). The backend address is set in `frontend/src/config.js`: deployed, it is the same origin under `/api`; on localhost, `ws://localhost:8787`.
+**With and without the backend.** With it, everyone in a room syncs across browsers and devices, and the room survives reloads and server restarts. Without it (the backend is unreachable on the first connect, or the URL has `?local=1`), the app falls back to the old mode: `BroadcastChannel` + localStorage, so only windows of *one* browser sync (**Open as Bob** gives you the second window). URL parameters: `?user=`, `?room=`, `?local=1`, and `?server=wss://…` (overrides the backend for one session; localhost only). The backend address is set in `frontend/src/config.js`: deployed, it is the same origin under `/api`; on localhost, `ws://localhost:8787`.
 
 The page needs an internet connection, for the CDN and the API.
 
@@ -111,7 +111,7 @@ The library owns the state, and React re-renders on every change. Two places del
 
 ## What was reproduced
 
-- A block editor with headings and prompt blocks, where each prompt block has code underneath, Run and Reset. Pressing Enter generates code: the *add* template is used when the block has no code, and the *edit* template when it does. Both templates are transcribed from Fig. 12–13.
+- A block editor laid out as an outline of any depth: each block is indented one step per enclosing heading, with a rail per section (hovering a heading lights the blocks its section covers), and Tab / Shift+Tab on a heading moves it and its subheadings in or out a level. Each prompt block has code underneath, Run and Reset. Pressing Enter generates code: the *add* template is used when the block has no code, and the *edit* template when it does. Both templates are transcribed from Fig. 12–13.
 - The Prompt Wiki: a multi-level, foldable outline that shows author badges, action dots and comment counts, with click-to-navigate.
 - The Message panel: actions in chronological order, with unprocessed actions pinned at the top with a dot, and From/To links that jump to the block and pulse the node.
 - Nodes: you select a phrase and it becomes an atomic chip, which is the source node. The ◎ button makes the **whole prompt** the source, and **source** on a heading makes a **whole section** the source. In the wiki, the target can be a selected phrase, a clicked chip, the whole prompt, or a heading (all four mechanisms).

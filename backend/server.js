@@ -14,6 +14,7 @@ const ORIGINS = (env.ALLOWED_ORIGINS || 'https://coprompt-revibe.wangleishen.com
 const MAX_MSG_BYTES = +env.MAX_MSG_BYTES || 2 * 1024 * 1024; // a block carries its outputs (plots) and history
 const MAX_CONN_PER_ROOM = +env.MAX_CONN_PER_ROOM || 20;
 const MAX_ROOMS = +env.MAX_ROOMS || 100;                    // rooms on disk; caps what an anonymous client can create
+const MAX_ROOM_BYTES = +env.MAX_ROOM_BYTES || 20 * 1024 * 1024; // one room's JSON; bounds RAM and disk (MAX_ROOMS × this)
 const MSG_RATE = +env.MSG_RATE || 20;                         // messages per second per connection, sustained
 const MSG_BURST = +env.MSG_BURST || 200;                      // a reconnect replays every locally newer object at once
 const HEARTBEAT_MS = +env.HEARTBEAT_MS || 30000;
@@ -31,15 +32,17 @@ function openRoom(name) {
   if (r) return r;
   const file = path.join(DATA_DIR, name + '.json');
   const saved = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
-  if (!saved && fs.readdirSync(DATA_DIR).filter(f => f.endsWith('.json')).length >= MAX_ROOMS) return null;
-  r = { name, file, epoch: saved?.epoch || 0, S: saved?.S || null, clients: new Set(), timer: null };
+  if (!saved && (rooms.size >= MAX_ROOMS || fs.readdirSync(DATA_DIR).filter(f => f.endsWith('.json')).length >= MAX_ROOMS)) return null;
+  r = { name, file, epoch: saved?.epoch || 0, S: saved?.S || null, bytes: saved ? fs.statSync(file).size : 0, clients: new Set(), timer: null };
   rooms.set(name, r);
   return r;
 }
 function flush(r) {
   clearTimeout(r.timer); r.timer = null;
   if (!r.S) return;
-  fs.writeFileSync(r.file + '.tmp', JSON.stringify({ epoch: r.epoch, S: r.S }));
+  const json = JSON.stringify({ epoch: r.epoch, S: r.S });
+  r.bytes = json.length; // exact again; between flushes puts are added on top (an overestimate, so the cap errs safe)
+  fs.writeFileSync(r.file + '.tmp', json);
   fs.renameSync(r.file + '.tmp', r.file); // atomic: a crash mid-write never leaves half a room
 }
 const changed = r => { r.timer ||= setTimeout(() => flush(r), SAVE_DELAY_MS); };
@@ -48,11 +51,11 @@ const send = (ws, m) => ws.readyState === 1 && ws.send(JSON.stringify(m));
 const others = (ws, m) => { const s = JSON.stringify(m); for (const c of ws.room.clients) if (c !== ws && c.readyState === 1) c.send(s); };
 const all = (r, m) => { const s = JSON.stringify(m); for (const c of r.clients) if (c.readyState === 1) c.send(s); };
 
-function onMessage(ws, m) {
+function onMessage(ws, m, size) {
   const r = ws.room;
   switch (m.t) {
     case 'hello': { // the first client into an empty room supplies the seed; everyone else gets the room as it is
-      if (!r.S) { if (!validState(m.seed)) return ws.close(1007, 'bad seed'); r.S = m.seed; changed(r); }
+      if (!r.S) { if (!validState(m.seed)) return ws.close(1007, 'bad seed'); r.S = m.seed; r.bytes = size; changed(r); }
       send(ws, { t: 'snapshot', S: r.S, epoch: r.epoch });
       for (const c of r.clients) if (c !== ws) { // replay what the others are doing right now
         if (c.b) send(ws, { t: 'presence', user: c.user, b: c.b });
@@ -67,21 +70,23 @@ function onMessage(ws, m) {
         return ws.close(1007, 'bad put');
       const cur = r.S[kind][obj.id];
       if (cur && !(obj.upd > cur.upd)) return send(ws, { t: 'put', kind, obj: cur }); // lost: tell the writer what won
-      r.S[kind][obj.id] = obj; changed(r);
+      if (r.bytes + size > MAX_ROOM_BYTES) return ws.close(1009, 'room full'); // stops anyone filling RAM and disk
+      r.S[kind][obj.id] = obj; r.bytes += size; changed(r);
       return others(ws, { t: 'put', kind, obj });
     }
     case 'presence':
-      ws.b = typeof m.b === 'string' ? m.b : null;
+      ws.b = typeof m.b === 'string' && NAME.test(m.b) ? m.b : null; // a block id
       return others(ws, { t: 'presence', user: ws.user, b: ws.b });
     case 'busy': {
-      if (typeof m.id !== 'string') return;
-      const label = typeof m.label === 'string' ? m.label : null;
+      if (typeof m.id !== 'string' || !NAME.test(m.id)) return;
+      const label = typeof m.label === 'string' ? m.label.slice(0, 100) : null;
+      if (label && !ws.busy[m.id] && Object.keys(ws.busy).length >= 50) return;
       label ? ws.busy[m.id] = label : delete ws.busy[m.id];
       return others(ws, { t: 'busy', id: m.id, label, user: ws.user });
     }
     case 'reset':
       if (!validState(m.S)) return ws.close(1007, 'bad reset');
-      r.S = m.S; r.epoch++; changed(r);
+      r.S = m.S; r.bytes = size; r.epoch++; changed(r);
       return all(r, { t: 'reset', S: r.S, epoch: r.epoch }); // the sender too, so it learns the new epoch
   }
 }
@@ -114,7 +119,7 @@ server.on('upgrade', (req, sock, head) => {
       ws.tokens = Math.min(MSG_BURST, ws.tokens + (now - ws.last) * MSG_RATE / 1000); ws.last = now;
       if (--ws.tokens < 0) return ws.close(1008, 'rate limit'); // the client reconnects and resyncs
       let m; try { m = JSON.parse(data); } catch { return ws.close(1007, 'bad json'); }
-      if (!isBinary && m && typeof m === 'object') onMessage(ws, m);
+      if (!isBinary && m && typeof m === 'object') onMessage(ws, m, data.length);
     });
     ws.on('close', () => {
       room.clients.delete(ws);

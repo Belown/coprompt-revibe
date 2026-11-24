@@ -9,7 +9,7 @@ import WebSocket from 'ws';
 const PORT = 18787, DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-sync-')), ORIGIN = 'http://localhost:8000';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const start = async () => {
-  const p = spawn(process.execPath, ['server.js'], { env: { ...process.env, PORT, DATA_DIR, DEEPSEEK_API_KEY: 'not-a-real-key', ANTHROPIC_API_KEY: '', LLM_ACCESS_CODE: 'letmein' }, stdio: 'inherit' });
+  const p = spawn(process.execPath, ['server.js'], { env: { ...process.env, PORT, DATA_DIR, DEEPSEEK_API_KEY: 'not-a-real-key', ANTHROPIC_API_KEY: '', LLM_ACCESS_CODE: 'letmein', MAX_ROOM_BYTES: 50000 }, stdio: 'inherit' });
   for (let i = 0; i < 50; i++) { try { await fetch(`http://localhost:${PORT}/health`); return p; } catch { await sleep(100); } }
   throw new Error('server did not start');
 };
@@ -40,6 +40,8 @@ try {
   assert.equal((await llm('/deepseek', { code: 'nope', body: ok })).status, 401);
   assert.equal((await llm('/deepseek', { code: 'letmein', body: { ...ok, model: 'gpt-x' } })).status, 400, 'model allowlist');
   assert.equal((await llm('/anthropic', { code: 'letmein', body: ok })).status, 503, 'no server key for that provider');
+  for (let i = 0; i < 8; i++) await llm('/deepseek', { code: 'guess' + i, body: ok }); // 10 wrong codes in all
+  assert.equal((await llm('/deepseek', { code: 'letmein', body: ok })).status, 429, 'access code guessing is throttled');
 
   const A = client('Alice'), B = client('Bob');
   await Promise.all([A.open, B.open]);
@@ -74,6 +76,9 @@ try {
   const D = client('Dan'); await D.open; D.send({ t: 'hello', seed: seed('d') });
   const sd = await D.next('snapshot');
   assert.equal(sd.epoch, 1); assert.ok(sd.S.blocks.r, 'state survives a restart');
+  const closed = new Promise(r => D.ws.on('close', r));
+  D.send({ t: 'put', kind: 'blocks', obj: { id: 'big', upd: 1, v: 'x'.repeat(60000) }, epoch: 1 });
+  assert.equal(await closed, 1009, 'a room cannot grow past MAX_ROOM_BYTES');
   D.ws.close();
   console.log('backend smoke test: all checks passed');
 } finally {
