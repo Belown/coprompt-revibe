@@ -75,7 +75,9 @@ try {
   // 0. tasks start free; each person takes theirs by clicking the avatar on the heading (the paper's split)
   const take = (P, ts) => P.ev(`(async () => { for (const t of ${JSON.stringify(ts)}) { await until(() => el(hid(t))); el(hid(t)).querySelector('.as').click(); } return 1; })()`);
   check(await A.ev(`until(() => el(hid('Feature Analysis'))?.querySelector('.as.free')) && ordered().every(b => !b.author)`), 'a new notebook has no owners: every task is free');
-  await take(A, ['Titanic', 'Data Preparation', '1. Deal', '2. Encode', '5. Deal']); await take(B, ['Feature Analysis', '3. Feature', '4. Correlation']);
+  await take(A, ['Data Preparation']);
+  check(await A.ev(`until(() => el(hid('1. Deal')).querySelector('.as.via') && el(hid('Feature Analysis')).querySelector('.as.free'))`), 'a task inside a taken section comes with it; the section’s sibling stays free');
+  await take(A, ['Titanic', '1. Deal', '2. Encode', '5. Deal']); await take(B, ['Feature Analysis', '3. Feature', '4. Correlation']);
   check(await B.ev(`until(() => ['Titanic', 'Data Preparation', '1. Deal', '2. Encode', '5. Deal'].every(t => S.blocks[hid(t)].author === 'Alice')
     && ['Feature Analysis', '3. Feature', '4. Correlation'].every(t => S.blocks[hid(t)].author === 'Bob')
     && el(byText('load data').id).querySelector('.phead .av').textContent === 'A')`), 'each takes their tasks (synced); a starting prompt belongs to whoever took its task');

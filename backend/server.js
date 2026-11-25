@@ -104,9 +104,16 @@ function flush(r) {
   if (!r.S) return;
   const json = JSON.stringify({ epoch: r.epoch, S: r.S, y: b64(Y.encodeStateAsUpdate(r.ydoc)) });
   r.bytes = json.length; // exact again; between flushes puts are added on top (an overestimate, so the cap errs safe)
-  fs.writeFileSync(r.file + '.tmp', json);
-  fs.renameSync(r.file + '.tmp', r.file); // atomic: a crash mid-write never leaves half a room
+  // A failed save (data folder not writable, disk full) must not kill the process: that drops every session, the
+  // clients reconnect and resend, the next save fails again, and everyone sees "Reconnecting…" forever.
+  // The room stays in memory and is saved on its next change; /health reports the error.
+  try {
+    fs.writeFileSync(r.file + '.tmp', json);
+    fs.renameSync(r.file + '.tmp', r.file); // atomic: a crash mid-write never leaves half a room
+    saveError = null;
+  } catch (e) { saveError = `${r.name}: ${e.message}`; console.error('could not save room', saveError); }
 }
+let saveError = null;
 const changed = r => { r.timer ||= setTimeout(() => flush(r), SAVE_DELAY_MS); };
 
 const send = (ws, m) => ws.readyState === 1 && ws.send(JSON.stringify(m));
@@ -180,7 +187,7 @@ const server = http.createServer((req, res) => {
   if (route === '/llm' || route.startsWith('/llm/')) return llmRoute(req, res, route.slice(5) || null, ORIGINS);
   if (req.method === 'GET' && route === '/health') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    return res.end(JSON.stringify({ ok: true, rooms: rooms.size, clients: wss.clients.size }));
+    return res.end(JSON.stringify({ ok: true, rooms: rooms.size, clients: wss.clients.size, saveError }));
   }
   res.writeHead(404).end();
 });

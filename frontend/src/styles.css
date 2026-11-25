@@ -146,7 +146,7 @@ aside{position:sticky;top:90px;display:flex;flex-direction:column;height:calc(10
 .as{flex:none;padding:0;border:0;background:none;border-radius:50%}
 .as:hover{background:none}
 .as:hover .av,.as:focus-visible .av{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--line-2)}
-.as.free .av{background:none;color:var(--mut);box-shadow:none;outline:1.5px dashed var(--mut);outline-offset:-1.5px}
+.as.free .av{background:none !important;color:var(--mut);box-shadow:none;outline:1.5px dashed var(--mut);outline-offset:-1.5px}
 .as.via .av{opacity:.45}
 
 /* prompt blocks */
@@ -276,16 +276,24 @@ i[data-unlink]{cursor:pointer;box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px va
 .pane-b:has(#wiki.picking) .howto{display:none}
 .wrow.is-src{background:var(--sunken)}
 .srctag{margin-left:auto;padding:1px 9px;font-size:12px;font-weight:600;color:var(--mut);border:1px dashed var(--line-2);border-radius:999px}
-.wrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-height:34px;padding:5px 8px;border-radius:8px;font-size:15px;line-height:1.4;transition:background .12s}
+/* a row's icons line up with the first line of its text, so a title that wraps keeps them at the top;
+   one guide line per enclosing heading, like the editor's outline */
+.wrow{position:relative;display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px;min-height:34px;padding:6px 8px 6px calc(var(--d,0) * 14px + 4px);
+  border-radius:8px;font-size:15px;line-height:22px;transition:background .12s}
+.wrow::before{content:"";position:absolute;left:0;top:0;bottom:0;width:calc(var(--d,0) * 14px);pointer-events:none;
+  background:repeating-linear-gradient(90deg,transparent 0 6px,var(--line-2) 6px 7px,transparent 7px 14px)}
+.wrow .dots,.wrow .wn{height:22px}
+.wrow .srctag{margin-top:1px}
+.pills{margin-top:-3px}
 .wrow:hover{background:var(--hover)}
 #wiki.picking .wrow:hover{background:var(--accent-soft)}
 .wh{font-weight:600}
 .wp{color:var(--ink-2)}
 .wrow .av{width:22px;height:22px;font-size:11px}
-.wh .hl{flex:none;width:20px;font:600 10.5px/1 var(--mono);color:var(--mut)}
+.wh .hl{flex:none;display:inline-flex;align-items:center;width:20px;height:22px;font:600 10.5px/1 var(--mono);color:var(--mut)}
 .wrow .grip{margin:0 -4px 0 -6px;height:22px}
 .wrow:hover .grip{opacity:1}
-.fold{flex:none;display:inline-grid;place-items:center;width:20px;height:20px;color:var(--mut);cursor:pointer;border-radius:5px}
+.fold{flex:none;margin-top:1px;display:inline-grid;place-items:center;width:20px;height:20px;color:var(--mut);cursor:pointer;border-radius:5px}
 .fold:hover{background:var(--line);color:var(--ink)}
 .wtext{flex:1;min-width:0;cursor:pointer}
 /* picking: one small icon per mechanism the row accepts, at the row's end */

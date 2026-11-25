@@ -16,8 +16,9 @@ export const prevCode = b => [...(b.hist || [])].reverse().find(v => v.code !== 
 export function ancestors(id) { // headings enclosing a block
   const st = [];
   for (const b of ordered()) {
-    if (b.id === id) return st.map(x => x.id);
-    if (b.kind === 'h') { while (st.length && st.at(-1).level >= b.level) st.pop(); st.push(b); }
+    if (b.kind === 'h') while (st.length && st.at(-1).level >= b.level) st.pop(); // close sections before looking: a heading's
+    if (b.id === id) return st.map(x => x.id);                                     // earlier siblings do not enclose it
+    if (b.kind === 'h') st.push(b);
   }
   return [];
 }

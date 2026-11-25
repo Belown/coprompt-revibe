@@ -69,7 +69,7 @@ export default function Wiki() {
     if (b.kind === 'h') {
       const folded = ui.FOLD.has(b.id);
       const fold = () => { folded ? ui.FOLD.delete(b.id) : ui.FOLD.add(b.id); emit(); };
-      rows.push(<div key={b.id} className={cls(b, 'wrow wh')} style={{ paddingLeft: dep[b.id] * 14 + 4 }} data-bid={b.id} {...drag(b)}>
+      rows.push(<div key={b.id} className={cls(b, 'wrow wh')} style={{ '--d': dep[b.id] }} data-bid={b.id} {...drag(b)}>
         {grip(b)}<span className="hl">H{b.level}</span>
         <Owner b={b} />
         <span className="wtext" tabIndex={0} onClick={() => jump(b.id)} onKeyDown={keyJump(b.id)}>{b.text || '(untitled)'}</span>
@@ -81,7 +81,7 @@ export default function Wiki() {
       if (folded) hideAt = b.level;
     } else {
       const sg = segs(b.id);
-      rows.push(<div key={b.id} className={cls(b, 'wrow wp' + (src?.b === b.id ? ' is-src' : ''))} style={{ paddingLeft: dep[b.id] * 14 + 4 }} data-bid={b.id} {...drag(b)}>
+      rows.push(<div key={b.id} className={cls(b, 'wrow wp' + (src?.b === b.id ? ' is-src' : ''))} style={{ '--d': dep[b.id] }} data-bid={b.id} {...drag(b)}>
         {grip(b)}<Dots types={types(b.id)} />
         <Avatar u={b.editor || owner(b.id)} />
         <span className="wtext" tabIndex={0} onKeyDown={keyJump(b.id)} onClick={e => {

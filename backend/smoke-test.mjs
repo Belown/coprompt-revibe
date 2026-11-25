@@ -144,6 +144,19 @@ try {
   D.send({ t: 'put', kind: 'blocks', obj: { id: 'big', upd: 1, v: 'x'.repeat(60000) }, epoch: 1 });
   assert.equal(await closed, 1009, 'a room cannot grow past MAX_ROOM_BYTES');
   D.ws.close();
+  // a save that fails (here its temp file's path is taken by a folder; on the server it was a data folder the
+  // container could not write) is logged and reported, and the server and its sessions stay up
+  const E = client('Erin'); await E.open; E.send({ t: 'hello', seed: seed('e') }); await E.next('snapshot');
+  const tmp = path.join(DATA_DIR, 't1.json.tmp'), health = async () => (await fetch(`http://localhost:${PORT}/health`)).json();
+  fs.mkdirSync(tmp);
+  E.send({ t: 'put', kind: 'blocks', obj: { id: 'keep', upd: Date.now(), v: 1 }, epoch: 1 }); await sleep(1500);
+  assert.match((await health()).saveError ?? '', /^t1: /, '/health reports the failed save');
+  assert.equal(E.ws.readyState, WebSocket.OPEN, 'a failed save does not take the server down');
+  fs.rmdirSync(tmp);
+  E.send({ t: 'put', kind: 'blocks', obj: { id: 'keep', upd: Date.now() + 1, v: 2 }, epoch: 1 }); await sleep(1500);
+  assert.equal((await health()).saveError, null, 'the next save succeeds and clears the error');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(DATA_DIR, 't1.json'), 'utf8')).S.blocks.keep.v, 2);
+  E.ws.close();
   console.log('backend smoke test: all checks passed');
 } finally {
   srv.kill();
