@@ -9,7 +9,7 @@ import HistoryPanel from './panels/HistoryPanel.jsx';
 import CommentsPanel from './panels/CommentsPanel.jsx';
 import { S, ui, presence, unseen, markSeen } from '../lib/store.js';
 import { ME, MECH, ucol } from '../lib/util.js';
-import { actsOn, text } from '../lib/model.js';
+import { actsOn, text, owner } from '../lib/model.js';
 import { generate, promptFromCode } from '../lib/codegen.js';
 import { commitCode, setSource } from '../lib/mechanisms.js';
 import { run, clearOutput } from '../lib/python.js';
@@ -38,7 +38,7 @@ export default function PromptBlock({ b, dnd, rail }) {
   const cls = ['block', 'pb', others.length && 'here', ui.SOURCE?.b === id && !ui.SOURCE.n && 'is-src', isNew && 'unseen',
     dnd.dragging === id && 'dragging', dnd.drop?.id === id && (dnd.drop.after ? 'drop-after' : 'drop-before')].filter(Boolean).join(' ');
   return <div ref={ref} className={cls} data-id={id} style={{ '--who': ucol(others[0]), ...rail }}
-    draggable={armed} onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); dnd.start(id); }}
+    draggable={armed} onDragStart={e => dnd.start(e, id)}
     onDragEnd={() => { arm(false); dnd.end(); }} onClick={() => markSeen(id)} onFocus={e => e.target.closest('.newtag') || markSeen(id)}>
     <span className="newtag" title="Changed by someone else or automatically. Click the block to dismiss.">
       {isNew ? (MECH[last.action] ? `Auto-updated · ${last.action}` : `Updated by ${last.by} · ${last.action}`) : ''}
@@ -46,7 +46,8 @@ export default function PromptBlock({ b, dnd, rail }) {
       {isNew && MECH[last.action] ? <button className="nt-act" onClick={() => setPanel('history')}>Review</button> : null}</span>
     <div className="phead">
       <Grip arm={arm} />
-      <Avatar u={b.editor || b.author} title={`created by ${b.author}, last modified by ${b.editor || b.author}`} />
+      <Avatar u={b.editor || owner(id)} title={b.author ? `created by ${b.author}, last modified by ${b.editor || b.author}`
+        : `a starting prompt of the topic${b.editor ? `, last modified by ${b.editor}` : ''}`} />
       <PromptInput b={b} />
       <Dots types={[...new Set(actsOn(id).map(a => a.type))]} />
       <span className="tools">

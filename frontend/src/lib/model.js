@@ -21,6 +21,12 @@ export function ancestors(id) { // headings enclosing a block
   }
   return [];
 }
+// who answers for a block: its author (who took the task, or wrote the prompt), else whoever took the task it is in;
+// null while nobody has
+export function owner(id) {
+  const b = S.blocks[id]; if (!b) return null;
+  return b.author || ancestors(id).reverse().map(h => S.blocks[h].author).find(Boolean) || null;
+}
 export function section(hid) { // every block under a heading, up to the next heading at its level or above
   const b = S.blocks[hid], list = ordered(), out = [];
   for (const x of list.slice(list.findIndex(x => x.id === hid) + 1)) { if (x.kind === 'h' && x.level <= b.level) break; out.push(x); }
@@ -41,17 +47,17 @@ export function members(bid) { // prompt blocks a reference covers: the prompt i
 export const inScope = (ref, id) => members(ref.b).includes(id);
 export function provider(bid) { // what a collaborator's prompt (or whole section) offers as context
   const b = S.blocks[bid], res = p => p.out?.text || p.out?.err || '';
-  if (b.kind === 'p') return { author: b.author, prompt: text(b), code: b.code, out: res(b) };
+  if (b.kind === 'p') return { author: owner(bid) || 'nobody yet', prompt: text(b), code: b.code, out: res(b) };
   const ps = members(bid).map(id => S.blocks[id]);
-  return { author: b.author, prompt: `section “${b.text}”: ${ps.map(p => text(p)).join('; ') || '(no prompts yet)'}`,
+  return { author: owner(bid) || 'nobody yet', prompt: `section “${b.text}”: ${ps.map(p => text(p)).join('; ') || '(no prompts yet)'}`,
     code: ps.filter(p => p.code.trim()).map(p => `# ${text(p)}\n${p.code}`).join('\n\n'), out: ps.map(res).filter(Boolean).join('\n') };
 }
 export function codeAbove(id) {
   const out = [];
-  for (const b of ordered()) { if (b.id === id) break; if (b.kind === 'p' && b.code.trim()) out.push(`# [${b.author}] ${text(b)}\n${b.code}`); }
+  for (const b of ordered()) { if (b.id === id) break; if (b.kind === 'p' && b.code.trim()) out.push(`# [${owner(b.id) || 'unassigned'}] ${text(b)}\n${b.code}`); }
   return out.join('\n\n') || '(none)';
 }
-export const outline = () => ordered().map(b => b.kind === 'h' ? `${'#'.repeat(b.level)} ${b.text} [${b.author}]` : `- prompt [${b.author}]: ${text(b)}`).join('\n');
+export const outline = () => ordered().map(b => b.kind === 'h' ? `${'#'.repeat(b.level)} ${b.text} [${owner(b.id) || 'unassigned'}]` : `- prompt [${owner(b.id) || 'unassigned'}]: ${text(b)}`).join('\n');
 export function sharedCtx(id) { // context shared to an enclosing heading (share → heading)
   return ancestors(id).flatMap(hid => S.blocks[hid].ctx || []).map(c => typeof c === 'string' ? { b: c } : c)
     .filter(c => S.blocks[c.b] && !S.blocks[c.b].del)

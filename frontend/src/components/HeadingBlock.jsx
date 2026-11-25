@@ -9,12 +9,12 @@ import Text from '@tiptap/extension-text';
 import Collaboration from '@tiptap/extension-collaboration';
 import { Placeholder } from '@tiptap/extensions';
 import Icon from './Icon.jsx';
-import { Dots, Ctl, Grip, Presence } from './bits.jsx';
+import { Owner, Dots, Ctl, Grip, Presence } from './bits.jsx';
 import { carets, editors } from './PromptInput.jsx';
 import { ui, presence } from '../lib/store.js';
 import { ME, ucol } from '../lib/util.js';
 import { actsOn } from '../lib/model.js';
-import { indent } from '../lib/blocks.js';
+import { indent, cycleLevel } from '../lib/blocks.js';
 import { setSource } from '../lib/mechanisms.js';
 import { headFrag } from '../lib/ytext.js';
 
@@ -40,9 +40,12 @@ export default function HeadingBlock({ b, dnd, rail }) {
   const cls = ['block', 'hb', others.length && 'here', ui.SOURCE?.b === id && 'is-src', dnd.dragging === id && 'dragging',
     dnd.drop?.id === id && (dnd.drop.after ? 'drop-after' : 'drop-before')].filter(Boolean).join(' ');
   return <div className={cls} data-id={id} data-d={rail['--d']} style={{ '--who': ucol(others[0]), ...rail }} draggable={armed}
-    onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); dnd.start(id); }}
+    onDragStart={e => dnd.start(e, id)}
     onDragEnd={() => { arm(false); dnd.end(); }}>
     <Grip arm={arm} />
+    <button className="lvl" title="Heading level: click to move in a level (Tab / Shift+Tab also work)" onClick={() => cycleLevel(id)}>H{b.level}</button>
+    {/* who the task is delegated to: requests and shares on this section go to them */}
+    <Owner b={b} />
     <EditorContent editor={editor} className="hi" />
     <Dots types={[...new Set(actsOn(id).map(a => a.type))]} />
     <Presence users={others} />

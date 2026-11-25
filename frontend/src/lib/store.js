@@ -134,11 +134,12 @@ if (LOCAL) goLocal(); else T = ws(onMsg, status, goLocal);
 // a new notebook for a topic (lib/scenarios.js); the room keeps its topic in S.scenario
 export function seed(topic = TOPIC) {
   const id = SCENARIOS[topic] ? topic : 'titanic', S = { blocks: {}, actions: {}, scenario: id }; let pos = 0;
-  const H = (text, level, author) => { const id = uid(); S.blocks[id] = { id, pos: pos += 1000, kind: 'h', level, text, author, upd: 0 }; };
-  const P = (t, author, code) => {
+  // no author: tasks are free until someone takes one, and a starting prompt belongs to whoever takes its task (model.owner)
+  const H = (text, level) => { const id = uid(); S.blocks[id] = { id, pos: pos += 1000, kind: 'h', level, text, author: null, upd: 0 }; };
+  const P = (t, code) => {
     const id = uid(), segs = [{ t: 'text', v: t }];
-    S.blocks[id] = { id, pos: pos += 1000, kind: 'p', segs, author, editor: author, code, out: null, upd: 0,
-      hist: [{ ts: Date.now(), by: author, action: 'add prompt', segs, code }] };
+    S.blocks[id] = { id, pos: pos += 1000, kind: 'p', segs, author: null, editor: null, code, out: null, upd: 0,
+      hist: [{ ts: Date.now(), by: null, action: 'add prompt', segs, code }] };
   };
   for (const [k, ...a] of SCENARIOS[id].blocks) k === 'h' ? H(...a) : P(...a);
   return S;

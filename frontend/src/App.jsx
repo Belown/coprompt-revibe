@@ -11,7 +11,7 @@ import Cursors from './components/Cursors.jsx';
 import { S, ui, put, presence, unseen, sendCursor, yFlush } from './lib/store.js';
 import { segs, awareness } from './lib/ytext.js';
 import { ME } from './lib/util.js';
-import { ordered, text, label, members } from './lib/model.js';
+import { ordered, text, label, members, section } from './lib/model.js';
 import { T } from './lib/templates.js';
 import { mech, setSource, commitCode, checkShares, unlinkAt } from './lib/mechanisms.js';
 import { generate, promptFromCode } from './lib/codegen.js';
@@ -24,7 +24,7 @@ import { toast, onModalClosed, isModalOpen } from './lib/ui.js';
 const useStore = () => useSyncExternalStore(subscribe, getVersion);
 
 // test hook for e2e.mjs (drives the app through the same functions the UI calls)
-window.cp = { get S() { return S; }, ui, put, ordered, text, label, members, T, mech, setSource, commitCode, generate, promptFromCode,
+window.cp = { get S() { return S; }, ui, put, ordered, text, label, members, section, T, mech, setSource, commitCode, generate, promptFromCode,
   addBlock, moveBlock, setPromptText, indent, run, pyRun, jump, segs, nodeFromWord, editorOf, codeViewOf, awareness };
 
 onModalClosed(checkShares);

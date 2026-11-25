@@ -9,6 +9,7 @@ A hands-on check of every feature, in about 15 minutes, by one person playing Al
 3. Check that the **API key** button is not orange. If it is, add a DeepSeek key there, or the access code if the server asks for one.
 4. Click **Invite**. A pop-up shows a QR code and the session link with **Copy**. Close it with **Done**.
 5. Open **⋯ → Open as Bob**. Place the two windows side by side. (To test on two devices instead, scan the QR code with a phone and join as Bob.)
+6. Take the tasks. Every heading starts with a dashed **?** (nobody has it yet). In A, click the **?** on **Titanic Survival**, **Data Preparation**, **1. Deal with missing values**, **2. Encode categorical features** and **5. Deal with outliers**. In B, click it on **Feature Analysis**, **3. Feature transformation** and **4. Correlation analysis**. Expect: each avatar turns into A or B in both windows, and the **load data** block shows A.
 
 Every step says who acts (**A** = Alice's window, **B** = Bob's). Type the text in `code font` exactly. "Expect" is what passes. The model's wording varies, so check what happened, not the exact words.
 
@@ -16,7 +17,7 @@ Every step says who acts (**A** = Alice's window, **B** = Bob's). Type the text 
 
 | # | Who | Do | Expect |
 |---|---|---|---|
-| 1.1 | A | Hover the heading **1. Deal with missing values in df**, click **+ prompt**, and type `fill missing Age values in df with the median age`. Do **not** press Enter. | The text appears in B as you type. B shows Alice's avatar on the block. |
+| 1.1 | A | Hover the heading **1. Deal with missing values in df**, click **+ block**, and type `fill missing Age values in df with the median age`. Do **not** press Enter. | The text appears in B as you type. B shows Alice's avatar on the block. |
 | 1.2 | B | Click at the end of that same prompt and type ` and drop the Cabin column`. | Both windows show the whole sentence, and neither person's text is lost. While B types, A sees a blue caret labelled **Bob**. |
 | 1.3 | B | Double-click the word `median`. | A toolbar appears over the word: **B I U S </> highlight · Make node**. A sees the word tinted in Bob's colour (his selection). |
 | 1.4 | B | Click **B** in the toolbar, then click elsewhere. | `median` is bold in **both** windows. No code is generated: formatting changes nothing for the model. |
@@ -27,7 +28,7 @@ Every step says who acts (**A** = Alice's window, **B** = Bob's). Type the text 
 |---|---|---|---|
 | 2.1 | A | Click into the prompt from 1.1 and press **Enter**. | Python code appears under the prompt in both windows. In B, the block is marked *Updated by Alice*; clicking the block clears the mark. |
 | 2.2 | A | Click **Run** on that block. | Output appears in both windows. If the code prints a count of missing values, it is 0 or small. |
-| 2.3 | A | Hover the heading **2. Encode categorical features in df**, click **+ prompt**, type `encode Sex and Embarked as numbers and store the result in df_encoded`, press Enter, then click **Run**. | Code that creates `df_encoded`; it runs without an error. |
+| 2.3 | A | Hover the heading **2. Encode categorical features in df**, click **+ block**, type `encode Sex and Embarked as numbers and store the result in df_encoded`, press Enter, then click **Run**. | Code that creates `df_encoded`; it runs without an error. |
 
 ## 3. Refer (rebuild my prompt from a collaborator's)
 

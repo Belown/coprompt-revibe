@@ -20,7 +20,7 @@ export default function Join() {
     <form className="dlg" onSubmit={submit}>
       <h3>{invited ? 'Join this CoPrompt session' : 'Start a CoPrompt session'}</h3>
       <p className="muted">Everyone who opens the same session link edits the same notebook, live, from any device.
-        The scenario is written for Alice and Bob, but any number of people can join.</p>
+        Any number of people can join; each takes the tasks they want.</p>
       <label>Your name<input name="user" required autoFocus maxLength={40} defaultValue={localStorage.getItem('cp_name') || ''} placeholder="Alice" /></label>
       <label>Session<input name="room" maxLength={64} defaultValue={invited || newRoom()} /></label>
       {!invited && <fieldset className="topics"><legend>Topic</legend>

@@ -44,7 +44,7 @@ export async function llm(user, json) {
 Environment: Python 3 in the browser (Pyodide) with pandas, numpy, matplotlib, scipy and scikit-learn (seaborn may be available). ${scenario(S?.scenario).data}
 Before a block runs, all code blocks above it run top to bottom in the same namespace, so their variables can be used directly.
 Never use Markdown code fences. ${json ? 'Reply with JSON only.' : 'Reply with raw Python code only.'}
-Notebook outline (the prompt wiki; [Name] = author):
+Notebook outline (the prompt wiki; [Name] = who does it):
 ${outline()}`;
   let t;
   if (!MODEL().startsWith('claude')) { // DeepSeek, OpenAI-compatible chat completions

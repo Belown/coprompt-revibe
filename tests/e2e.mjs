@@ -72,6 +72,14 @@ try {
   let B = await page(BASE + '?user=Bob' + ROOM); await sleep(1500);
   for (const P of [A, B]) await P.ev(INJECT);
 
+  // 0. tasks start free; each person takes theirs by clicking the avatar on the heading (the paper's split)
+  const take = (P, ts) => P.ev(`(async () => { for (const t of ${JSON.stringify(ts)}) { await until(() => el(hid(t))); el(hid(t)).querySelector('.as').click(); } return 1; })()`);
+  check(await A.ev(`until(() => el(hid('Feature Analysis'))?.querySelector('.as.free')) && ordered().every(b => !b.author)`), 'a new notebook has no owners: every task is free');
+  await take(A, ['Titanic', 'Data Preparation', '1. Deal', '2. Encode', '5. Deal']); await take(B, ['Feature Analysis', '3. Feature', '4. Correlation']);
+  check(await B.ev(`until(() => ['Titanic', 'Data Preparation', '1. Deal', '2. Encode', '5. Deal'].every(t => S.blocks[hid(t)].author === 'Alice')
+    && ['Feature Analysis', '3. Feature', '4. Correlation'].every(t => S.blocks[hid(t)].author === 'Bob')
+    && el(byText('load data').id).querySelector('.phead .av').textContent === 'A')`), 'each takes their tasks (synced); a starting prompt belongs to whoever took its task');
+
   // 1. Python execution of the seeded block
   // Pyodide comes from a CDN; if it cannot load, say so instead of hanging on run()
   const py = await A.ev(`(async()=>{ await until(() => cp.ui.py.s !== 'load', 150000); return cp.ui.py; })()`);
@@ -177,8 +185,8 @@ try {
   await A.ev(`(async()=>{ setPromptText('${fId}', 'remove rows with Fare above 300'); await generate('${fId}'); })()`);
   check(await A.ev(`__last.edit.includes('shared with this task') && __last.edit.includes('correlation')`), 'shared task context reaches an EDITED prompt too (gap 7)');
   // gap 5: code-first block → prompt written from the comments
-  const cId = await A.ev(`addBlock('c', byText('drop columns').id)`);
-  check(await A.ev(`until(() => document.activeElement === el('${cId}')?.querySelector('.cm-content') && !el('${cId}').querySelector('.p2c').hidden)`), 'code block focuses its code area and offers “Prompt from code”');
+  const cId = await A.ev(`addBlock('p', byText('drop columns').id)`);
+  check(await A.ev(`until(() => document.activeElement === el('${cId}')?.querySelector('.prompt') && !el('${cId}').querySelector('.p2c').hidden)`), 'a new block focuses its prompt and, while it is empty, offers “Prompt from code”');
   await A.ev(`(async()=>{ S.blocks['${cId}'].code = "# mean age per passenger class\\nprint(df.groupby('Pclass')['Age'].mean())"; await tick(); el('${cId}').querySelector('.p2c').click(); return until(() => text(S.blocks['${cId}'])); })()`);
   check(await B.ev(`until(() => text(S.blocks['${cId}']) === 'print the mean age per passenger class in df' && S.blocks['${cId}'].code.includes('groupby'))`), 'prompt generated from code comments, synced (gap 5)');
   check(await A.ev(`until(() => el('${cId}').querySelector('.p2c').hidden && S.blocks['${cId}'].hist.at(-1).action === 'prompt from code')`), 'prompt-from-code is versioned; the button hides once a prompt exists');
@@ -203,6 +211,40 @@ try {
   check(await B.ev(`until(() => ${lv} === '1,2,2' && getComputedStyle(el(hid('3. Feature'))).getPropertyValue('--d') === '1')`), 'outdent moves the section’s subheadings with it (synced, re-indented)');
   await A.ev(`indent(hid('Feature Analysis'), 1); indent(hid('Data Preparation'), 1)`);
   check(await A.ev(`${lv} === '2,3,3' && S.blocks[hid('Data Preparation')].level === 2`), 'indent restores it; indenting past the heading above is refused');
+  // drag and drop as the browser sends it: dropping on a heading's title must move the block, not paste its id into the title
+  const dragTo = (from, to) => `(() => { const dt = new DataTransfer(), r = ${to}.getBoundingClientRect(), o = { bubbles: true, cancelable: true, dataTransfer: dt, clientX: r.left + 30, clientY: r.bottom - 2 };
+    ${from}.dispatchEvent(new DragEvent('dragstart', o)); return new Promise(res => setTimeout(() => { ${to}.dispatchEvent(new DragEvent('dragover', o));
+    setTimeout(() => { ${to}.dispatchEvent(new DragEvent('drop', o)); ${from}.dispatchEvent(new DragEvent('dragend', o)); res(1); }, 50); }, 50)); })()`;
+  await A.ev(dragTo(`el('${cId}')`, `el(hid('4. Correlation')).querySelector('.htext')`));
+  check(await B.ev(`until(() => { const o = ordered().map(b => b.id); return o.indexOf('${cId}') === o.indexOf(hid('4. Correlation')) + 1; })`)
+    && await A.ev(`S.blocks[hid('4. Correlation')].text === '4. Correlation analysis' && !document.querySelector('.drop-before, .drop-after, .dragging')`), 'dragging a block onto a heading title moves it and leaves the title alone');
+  const order = `ordered().map(b => text(b).slice(0, 12)).join('|')`, before = await A.ev(order);
+  const sec = await A.ev(`JSON.stringify([hid('Feature Analysis'), ...section(hid('Feature Analysis')).map(b => b.id)])`);
+  await A.ev(`moveBlock(hid('Feature Analysis'), hid('Data Preparation'), false)`);
+  check(await A.ev(`(() => { const o = ordered().map(b => b.id), f = o.indexOf(hid('Feature Analysis')), s = ${sec};
+    return f < o.indexOf(hid('Data Preparation')) && JSON.stringify(o.slice(f, f + s.length)) === JSON.stringify(s); })()`), 'a heading moves with its whole section');
+  await A.ev(`moveBlock(hid('Data Preparation'), hid('Feature Analysis'), false); moveBlock(hid('Feature Analysis'), hid('4. Correlation'), true)`);
+  check(await A.ev(`${order} === ${JSON.stringify(before)}`), 'moving it back restores the order; dropping a heading inside its own section is refused');
+  // wiki: grip on the left, fold on the right, rows drag like blocks
+  check(await A.ev(`(() => { const r = document.querySelector('#wiki [data-bid="' + hid('Feature Analysis') + '"]'); return r.firstElementChild.classList.contains('grip') && r.lastElementChild.classList.contains('fold') && r.querySelector('.hl').textContent === 'H2'; })()`), 'wiki heading rows: grip left, H-level, fold toggle right');
+  const wrow = id => `document.querySelector('#wiki [data-bid="' + ${id} + '"]')`;
+  await A.ev(dragTo(wrow(`'${cId}'`), wrow(`hid('5. Deal')`)));
+  check(await B.ev(`until(() => { const o = ordered().map(b => b.id); return o.indexOf('${cId}') === o.indexOf(hid('5. Deal')) + 1; })`), 'dragging a wiki row reorders the notebook');
+  // H1/H2/H3 chip cycles through the allowed levels
+  check(await A.ev(`el(hid('Data Preparation')).querySelector('.lvl').textContent === 'H2'`), 'headings show their level');
+  await A.ev(`el(hid('5. Deal')).querySelector('.lvl').click()`);
+  check(await A.ev(`until(() => S.blocks[hid('5. Deal')].level === 4 && el(hid('5. Deal')).querySelector('.lvl').textContent === 'H4')`), 'the level chip moves a heading in a level');
+  await A.ev(`el(hid('5. Deal')).querySelector('.lvl').click()`);
+  check(await A.ev(`until(() => S.blocks[hid('5. Deal')].level === 1)`), 'the level chip goes back out to H1 when it cannot go deeper');
+  await A.ev(`indent(hid('5. Deal'), 1); indent(hid('5. Deal'), 1); 1`);
+  // giving a task up: it falls back to the section around it (Bob's) until Bob takes it himself; then Alice takes it back
+  await A.ev(`el(hid('5. Deal')).querySelector('.as').click()`);
+  check(await B.ev(`until(() => S.blocks[hid('5. Deal')].level === 3 && S.blocks[hid('5. Deal')].author === null && el(hid('5. Deal')).querySelector('.as.via .av').textContent === 'B')`), 'a task given up shows the section’s owner, faded (synced)');
+  await B.ev(`el(hid('5. Deal')).querySelector('.as').click()`);
+  check(await A.ev(`until(() => S.blocks[hid('5. Deal')].author === 'Bob')`), 'someone else can take it');
+  await B.ev(`el(hid('5. Deal')).querySelector('.as').click()`); await A.ev(`until(() => S.blocks[hid('5. Deal')].author === null)`);
+  await A.ev(`el(hid('5. Deal')).querySelector('.as').click()`);
+  check(await B.ev(`until(() => S.blocks[hid('5. Deal')].author === 'Alice')`), 'and the first one can take it back once it is free');
   // picking: rows inside (or around) the source section get no pills; the rest only share/link
   await A.ev(`setSource(hid('Data Preparation'))`);
   check(await A.ev(`until(() => { const pills = t => [...document.querySelector('#wiki [data-bid="' + hid(t) + '"]').querySelectorAll('.pill')].map(x => x.textContent).join();

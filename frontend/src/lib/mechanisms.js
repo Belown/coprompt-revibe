@@ -2,7 +2,7 @@
 import { S, ui, put, busy, seenNow } from './store.js';
 import { emit } from './bus.js';
 import { ME, MECH, uid, trimWs } from './util.js';
-import { text, label, live, actsOn, members, section, inScope, provider, prevCode, snap, codeAbove } from './model.js';
+import { text, label, live, actsOn, members, owner, section, inScope, provider, prevCode, snap, codeAbove } from './model.js';
 import { T, applyPrompt } from './templates.js';
 import { segs, setSegs, renameNode } from './ytext.js';
 import { llm, hasKey, needKey } from './llm.js';
@@ -18,7 +18,7 @@ function rewritten(id, msg) {
 export async function commitCode(id, code, action, by = ME, visited = new Set()) {
   const b = S.blocks[id]; b.code = code;
   b.hist = [...(b.hist || []), snap(b, action, by)].slice(-40);
-  if (b.author === ME || !MECH[action]) seenNow(b); // automatic rewrites of others' blocks stay highlighted for them
+  if (owner(b.id) === ME || !MECH[action]) seenNow(b); // automatic rewrites of others' blocks stay highlighted for them
   put('blocks', b);
   await afterCodeChange(id, visited);
 }
@@ -109,7 +109,8 @@ export const overlaps = (a, b) => a === b || within(a, b) || within(b, a);
 // the mechanisms the current source can use on a target; [] = not a target (the wiki shows no pills there)
 export function targetKinds(tgtB) {
   const src = ui.SOURCE; if (!src || !S.blocks[src.b] || overlaps(src.b, tgtB)) return [];
-  return S.blocks[src.b].kind === 'h' ? ['share', 'link'] : ['refer', 'request', 'share', 'link'];
+  const ks = S.blocks[src.b].kind === 'h' ? ['share', 'link'] : ['refer', 'request', 'share', 'link'];
+  return owner(tgtB) ? ks : ks.filter(t => t !== 'request' && t !== 'share'); // a free task has nobody to answer them
 }
 
 // create a mechanism from the current source node to a target picked in the wiki (rowEl: the wiki row, for a selected phrase)
@@ -120,32 +121,34 @@ export async function mech(type, tgtB, rowEl) {
   const sb = S.blocks[src.b], tb = S.blocks[tgtB];
   if (sb.kind === 'h' && (type === 'refer' || type === 'request')) return toast('Refer and request rebuild one prompt: use a node or a whole prompt as the source.');
   if (overlaps(src.b, tgtB)) return toast('The source and the target overlap; pick a target outside the source’s section.');
+  const to = owner(tgtB); // requests and shares need someone to answer them
+  if (!to && (type === 'request' || type === 'share')) return toast(`Nobody has taken “${label({ b: tgtB })}” yet, so nobody would answer a ${type}. Refer or link to it instead.`);
   // target node: text selected in the wiki row → new node; else a clicked wiki node; else whole prompt/heading
   let n = null; const sel = getSelection();
   if (sel.rangeCount && !sel.isCollapsed && rowEl.contains(sel.anchorNode)) n = makeTargetNode(tgtB, sel);
   else if (ui.TGTNODE?.b === tgtB) n = ui.TGTNODE.n;
   if (type !== 'share' && !hasKey()) return needKey(); // ask for the key before the note, not after
-  const tgt = { b: tgtB, n }, who = tb.author === ME ? 'your' : `${tb.author}’s`, what = tb.kind === 'h' ? 'section' : 'prompt';
+  const tgt = { b: tgtB, n }, who = to === ME ? 'your' : to ? `${to}’s` : 'the', what = tb.kind === 'h' ? 'section' : 'prompt';
   // every mechanism carries an optional message (§6.2: "(3) additional messages"); for request it states the expected result
   const [title, body, placeholder, ok] = {
     refer: [`Refer to ${who} ${what}`, `Your prompt “${text(sb)}” is rewritten, with its code, from “${label(tgt)}” (prompt, code and execution result).`,
       'Optional note for the model, e.g. use the encoded frame', 'Refer'],
-    request: [`Request to ${tb.author}`, `Ask ${tb.author} to finish “${label(tgt)}”. Your prompt “${text(sb)}” is regenerated once it is done, and again whenever it changes.`,
+    request: [`Request to ${to}`, `Ask ${to} to finish “${label(tgt)}”. Your prompt “${text(sb)}” is regenerated once it is done, and again whenever it changes.`,
       'What do you need? e.g. fill missing values instead of dropping the columns', 'Send request'],
-    share: [`Share with ${tb.author}`, `${tb.author} gets a pop-up offering “${label(src)}” for “${label(tgt)}”.`, `Optional note for ${tb.author}`, 'Share'],
+    share: [`Share with ${to}`, `${to} gets a pop-up offering “${label(src)}” for “${label(tgt)}”.`, `Optional note for ${to}`, 'Share'],
     link: [`Link to ${who} ${what}`, `“${label(src)}” and “${label(tgt)}” stay in sync: when either side’s code changes, the other is checked and updated.`,
       'Optional: why they belong together', 'Link'],
   }[type];
   const msg = await ask(body, { title, input: true, placeholder, ok });
   if (msg == null) return;
-  const a = { id: uid(), type, src, tgt, by: ME, owner: tb.author, msg: msg.trim(), ts: Date.now(),
+  const a = { id: uid(), type, src, tgt, by: ME, owner: to, msg: msg.trim(), ts: Date.now(),
     status: type === 'refer' ? 'done' : type === 'link' ? 'active' : 'open', seen: [ME] };
   ui.SOURCE = ui.TGTNODE = null;
   put('actions', a);
   if (type === 'refer') try { await regen(a.src.b, a.src.n, a.tgt.b, a); rewritten(a.src.b, `Your prompt was rebuilt from “${label(tgt)}”.`); } catch (e) { toastErr(e); }
   if (type === 'link') toast('Linked. Changing either side now updates the other. Click the link dot to unlink.');
-  if (type === 'share') toast(`Shared. Waiting for ${tb.author} to accept.`);
-  if (type === 'request') toast(`Request sent to ${tb.author}. Your prompt updates when it is fulfilled.`);
+  if (type === 'share') toast(`Shared. Waiting for ${to} to accept.`);
+  if (type === 'request') toast(`Request sent to ${to}. Your prompt updates when it is fulfilled.`);
 }
 
 export function setSource(id) { // whole prompt, or a whole section (heading), as the source node

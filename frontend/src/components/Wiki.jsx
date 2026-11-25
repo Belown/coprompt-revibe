@@ -1,10 +1,11 @@
 // Prompt Wiki (§6.1, Fig. 3b): foldable tree of headings → prompts → nodes; picks the target of a mechanism.
 import Icon from './Icon.jsx';
-import { Avatar, Dots, Chip, MechTag } from './bits.jsx';
+import { useState } from 'react';
+import { Avatar, Owner, Dots, Chip, MechTag, Grip, useDnd } from './bits.jsx';
 import { S, ui } from '../lib/store.js';
 import { emit } from '../lib/bus.js';
 import { MECH } from '../lib/util.js';
-import { ordered, actsOn, label, depths } from '../lib/model.js';
+import { ordered, actsOn, label, depths, section, owner } from '../lib/model.js';
 import { mech, targetKinds } from '../lib/mechanisms.js';
 import { jump } from '../lib/promptDom.js';
 import { segs } from '../lib/ytext.js';
@@ -52,27 +53,37 @@ const keyJump = id => e => { if (e.key === 'Enter') { e.preventDefault(); jump(i
 export default function Wiki() {
   const src = ui.SOURCE, secSrc = S.blocks[src?.b]?.kind === 'h';
   const rows = [], dep = depths(); let hideAt = null;
-  const cls = (b, base) => { if (!src || src.b === b.id) return base; const k = targetKinds(b.id); return k.length ? base : base + ' nope'; };
+  // drag a row by its grip to reorder the notebook; dropping below a folded heading puts it after the whole section
+  const dnd = useDnd('#wiki .wrow', (id, after) => after && ui.FOLD.has(id) ? section(id).at(-1)?.id ?? id : id);
+  const [armed, setArmed] = useState(null);
+  const drag = b => ({ draggable: armed === b.id, onDragStart: e => dnd.start(e, b.id), onDragEnd: () => { setArmed(null); dnd.end(); } });
+  const grip = b => <Grip arm={on => setArmed(on ? b.id : null)} />;
+  const cls = (b, base) => {
+    if (dnd.dragging === b.id) base += ' dragging';
+    if (dnd.drop?.id === b.id) base += dnd.drop.after ? ' drop-after' : ' drop-before';
+    if (!src || src.b === b.id) return base; const k = targetKinds(b.id); return k.length ? base : base + ' nope';
+  };
   for (const b of ordered()) {
     if (b.kind === 'h' && hideAt !== null && b.level <= hideAt) hideAt = null;
     if (hideAt !== null) continue;
     if (b.kind === 'h') {
       const folded = ui.FOLD.has(b.id);
       const fold = () => { folded ? ui.FOLD.delete(b.id) : ui.FOLD.add(b.id); emit(); };
-      rows.push(<div key={b.id} className={cls(b, 'wrow wh')} style={{ paddingLeft: dep[b.id] * 14 + 4 }} data-bid={b.id}>
-        <span className="fold" role="button" tabIndex={0} aria-label={folded ? 'Expand' : 'Collapse'} aria-expanded={!folded} onClick={fold}
-          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fold(); } }}><Icon name={folded ? 'right' : 'down'} /></span>
-        <Avatar u={b.author} />
+      rows.push(<div key={b.id} className={cls(b, 'wrow wh')} style={{ paddingLeft: dep[b.id] * 14 + 4 }} data-bid={b.id} {...drag(b)}>
+        {grip(b)}<span className="hl">H{b.level}</span>
+        <Owner b={b} />
         <span className="wtext" tabIndex={0} onClick={() => jump(b.id)} onKeyDown={keyJump(b.id)}>{b.text || '(untitled)'}</span>
         <Dots types={types(b.id)}>{(b.ctx || []).length ? <i style={{ background: 'var(--share)' }} title="shared context attached" /> : null}</Dots>
         {src?.b === b.id ? <span className="srctag">source</span> : <Pills b={b} kinds={targetKinds(b.id)} />}
+        <span className="fold" role="button" tabIndex={0} aria-label={folded ? 'Expand' : 'Collapse'} aria-expanded={!folded} onClick={fold}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fold(); } }}><Icon name={folded ? 'left' : 'down'} /></span>
       </div>);
       if (folded) hideAt = b.level;
     } else {
       const sg = segs(b.id);
-      rows.push(<div key={b.id} className={cls(b, 'wrow wp' + (src?.b === b.id ? ' is-src' : ''))} style={{ paddingLeft: dep[b.id] * 14 + 4 }} data-bid={b.id}>
-        <Dots types={types(b.id)} />
-        <Avatar u={b.editor || b.author} />
+      rows.push(<div key={b.id} className={cls(b, 'wrow wp' + (src?.b === b.id ? ' is-src' : ''))} style={{ paddingLeft: dep[b.id] * 14 + 4 }} data-bid={b.id} {...drag(b)}>
+        {grip(b)}<Dots types={types(b.id)} />
+        <Avatar u={b.editor || owner(b.id)} />
         <span className="wtext" tabIndex={0} onKeyDown={keyJump(b.id)} onClick={e => {
           const c = e.target.closest('.node');
           if (c) { ui.TGTNODE = ui.TGTNODE?.n === c.dataset.n ? null : { b: b.id, n: c.dataset.n }; return emit(); }
@@ -90,7 +101,7 @@ export default function Wiki() {
       <button className="help" onClick={help} title="What do refer, request, share and link do?" aria-label="What do refer, request, share and link do?">?</button></h2>
     <div className="pane-b">
       <div className="legend">{Object.keys(MECH).map(t => <span key={t} className="lg" style={{ '--c': MECH[t].c }} title={MECH[t].tip}><MechTag t={t} /></span>)}</div>
-      <p className="howto">Select a phrase in your prompt and choose <b>Make node</b> (or use a whole prompt or section as the source), then pick a mechanism on a target below.</p>
+      <p className="howto">Take a task by clicking its <b>?</b>. Select a phrase in your prompt and choose <b>Make node</b> (or use a whole prompt or section as the source), then pick a mechanism on a target below.</p>
       {/* sticky while you scroll the tree for a target: what the source is, and what each mechanism will do */}
       <div id="srcbar">{src && <>
         <div className="sb-top"><Icon name="node" /><span>{secSrc ? 'Source section ' : 'Source '}<code>{label(src)}</code></span>
@@ -99,7 +110,7 @@ export default function Wiki() {
           <div key={t} style={{ '--c': MECH[t].c }}><dt><Icon name={t} />{t}</dt><dd>{MECH[t].does}</dd></div>)}</dl>
         <p className="sb-hint">Pick one on a target below. Greyed rows overlap the source.</p>
       </>}</div>
-      <div id="wiki" className={src ? 'picking' : undefined}>{rows}</div>
+      <div id="wiki" className={src ? 'picking' : undefined} {...dnd.on}>{rows}</div>
     </div>
   </section>;
 }
