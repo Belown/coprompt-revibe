@@ -1,3 +1,3 @@
 @echo off
-node "%~dp0scripts\offline.mjs" %*
+node "%~dp0scripts\offline.mjs"
 pause

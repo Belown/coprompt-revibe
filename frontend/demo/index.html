@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CoPrompt Revibe · offline demo</title>
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<!-- The offline demo: Alice and Bob are two copies of the app (?demo=1: no server, scripted model, Titanic only) in one page.
+     Both stay loaded, so switching is instant; they sync through the browser (local mode). -->
+<style>
+  :root{--ground:#f6f5f1;--surface:#fff;--sunken:#f3f2ee;--ink:#1c1c1f;--mut:#64656c;--line:#e6e3dc;--line-2:#d6d2c8;
+    --alice:#c33a66;--bob:#2d62c4;--link:#6b4fd6;--font:"IBM Plex Sans",system-ui,"Segoe UI",sans-serif;--mono:"IBM Plex Mono",Consolas,monospace}
+  *{box-sizing:border-box} html,body{height:100%;margin:0}
+  body{display:flex;flex-direction:column;font:400 14px/1.45 var(--font);color:var(--ink);background:var(--ground)}
+  #bar{display:flex;align-items:center;gap:14px;padding:8px 16px;border-bottom:1px solid var(--line);background:var(--surface)}
+  #bar h1{font-size:15px;font-weight:600;margin:0}#bar h1 small{font-weight:400;color:var(--mut)}
+  .grow{flex:1}
+  #views{display:inline-flex;border:1px solid var(--line-2);border-radius:9px;padding:2px;gap:2px;background:var(--sunken)}
+  #views button{font:inherit;font-weight:500;border:0;background:none;border-radius:7px;padding:5px 14px;cursor:pointer;display:inline-flex;gap:7px;align-items:center;color:var(--mut)}
+  #views button[aria-pressed=true]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .av{width:20px;height:20px;border-radius:50%;color:#fff;font-size:11px;font-weight:600;display:inline-grid;place-items:center}
+  .badge{font-size:11.5px;font-weight:600;color:#fff;background:#b42318;border-radius:999px;padding:1px 7px}
+  .badge:empty{display:none}
+  #guidebtn{font:inherit;font-weight:500;border:1px solid var(--line-2);background:var(--surface);border-radius:8px;padding:5px 12px;cursor:pointer}
+  .note{color:var(--mut);font-size:13px}
+  #stage{flex:1;position:relative;display:flex}
+  #stage iframe{border:0;flex:1;min-width:0;background:var(--ground)}
+  /* one view at a time: the other stays laid out and running, just invisible */
+  #stage:not(.both) iframe:not(.on){position:absolute;inset:0;visibility:hidden;pointer-events:none}
+  #stage.both iframe+iframe{border-left:2px solid var(--line-2)}
+  #guide{max-width:620px;max-height:80vh;overflow:auto;border:1px solid var(--line);border-radius:14px;padding:20px 24px;box-shadow:0 24px 56px -16px rgba(0,0,0,.3);font-size:14px}
+  #guide h2{font-size:17px;margin:0 0 4px}
+  #guide ol{padding-left:20px;margin:12px 0 0}#guide li{margin:0 0 10px}
+  #guide code{font:13px var(--mono);background:var(--sunken);padding:1px 5px;border-radius:5px}
+  #guide .who{font-weight:600;cursor:pointer;text-decoration:underline dotted}
+  #guide .who[data-u=Alice]{color:var(--alice)}#guide .who[data-u=Bob]{color:var(--bob)}
+</style>
+</head>
+<body>
+<div id="bar">
+  <h1>CoPrompt revibe <small>· offline demo</small></h1>
+  <div id="views" role="group" aria-label="Whose view">
+    <button data-v="Alice"><span class="av" style="background:var(--alice)">A</span>Alice<span class="badge"></span></button>
+    <button data-v="Bob"><span class="av" style="background:var(--bob)">B</span>Bob<span class="badge"></span></button>
+    <button data-v="both">Side by side</button>
+  </div>
+  <span class="grow"></span>
+  <span class="note">No server · scripted model · Titanic exercise</span>
+  <button id="guidebtn" popovertarget="guide">Guide</button>
+</div>
+<div id="stage">
+  <iframe data-u="Alice" title="Alice's view" src="../app/?user=Alice&room=offline-demo&demo=1"></iframe>
+  <iframe data-u="Bob" title="Bob's view" src="../app/?user=Bob&room=offline-demo&demo=1"></iframe>
+</div>
+
+<div id="guide" popover>
+  <h2>The exercise: Titanic, as in the paper's Fig. 2</h2>
+  <p class="note">Alice owns data preparation and outliers, Bob the feature analysis. The model is a script: these prompts (or close variations) work, others get a message. Click a name to switch to that view. <b>Reset demo…</b> in the ⋯ menu starts over.</p>
+  <ol>
+    <li><span class="who" data-u="Alice">Alice</span>: click <b>Run</b> on <code>load data/titanic.csv into df</code> (wait for “Python: ready”).</li>
+    <li><span class="who" data-u="Alice">Alice</span>: hover <i>1. Deal with missing values</i>, <b>+ prompt</b>, type <code>drop columns with missing values in df</code>, press Enter, then Run.</li>
+    <li><span class="who" data-u="Alice">Alice</span>: under <i>2. Encode</i>: <code>encode categorical features in df and store the result as df_encoded</code>, Enter, Run.</li>
+    <li><span class="who" data-u="Bob">Bob</span> · <b>refer</b>: under <i>3. Feature transformation</i>: <code>calculate the skewness of all features in df</code>, Enter. Double-click <code>df</code>, <b>Make node</b>, then <b>refer</b> on Alice's encode prompt in the wiki. His prompt and code switch to <code>df_encoded</code>.</li>
+    <li><span class="who" data-u="Bob">Bob</span> · <b>request</b>: under <i>4. Correlation</i>: <code>plot the correlation matrix of df as a heatmap</code>, Enter. Make <code>df</code> a node, <b>request</b> on Alice's missing-values prompt, note <code>fill missing values instead of dropping the columns</code>.</li>
+    <li><span class="who" data-u="Alice">Alice</span>: the request is in Messages. Change her prompt to <code>fill missing values in df without dropping any rows or columns</code>, Enter. Bob's heatmap regenerates by itself.</li>
+    <li><span class="who" data-u="Alice">Alice</span>: under <i>5. Deal with outliers</i>: <code>remove outliers of df</code>, Enter. <span class="who" data-u="Bob">Bob</span> · <b>share</b>: make <code>skewness</code> a node, <b>share</b> on that prompt. <span class="who" data-u="Alice">Alice</span>: <b>Accept</b> the pop-up; her filter now only uses the skewed columns.</li>
+    <li><span class="who" data-u="Alice">Alice</span> · <b>link</b>: make <code>df</code> in her missing-values prompt a node, double-click <code>df</code> in the encode row of the wiki to select it, then <b>link</b> on that row. Append <code>and store the result as df_filled</code> to the missing-values prompt, Enter: the encode prompt and code follow to <code>df_filled</code>.</li>
+    <li>Either: the bulb (<b>Explain</b>), the clock (<b>History</b>: diff and restore), the speech bubble (<b>comments</b>).</li>
+    <li><span class="who" data-u="Alice">Alice</span> · code first: <b>+ block</b>, type <code># survival rate by class</code> and <code>df.groupby('Pclass')['Survived'].mean()</code> in its code, then <b>Prompt from code</b>.</li>
+  </ol>
+</div>
+
+<script>
+  const stage = document.getElementById('stage'), frames = [...stage.querySelectorAll('iframe')], btns = [...document.querySelectorAll('#views button')];
+  function show(v) {
+    stage.classList.toggle('both', v === 'both');
+    frames.forEach(f => f.classList.toggle('on', f.dataset.u === v));
+    btns.forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v));
+    history.replaceState(null, '', '#' + v);
+  }
+  btns.forEach(b => b.onclick = () => show(b.dataset.v));
+  document.querySelectorAll('#guide .who').forEach(w => w.onclick = () => { show(w.dataset.u); document.getElementById('guide').hidePopover(); });
+  show(['Alice', 'Bob', 'both'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'Alice');
+  // what is waiting in the other view: its unread messages, or a pop-up (a share to accept)
+  setInterval(() => frames.forEach(f => {
+    const d = f.contentDocument, badge = btns.find(b => b.dataset.v === f.dataset.u).querySelector('.badge');
+    if (!d) return;
+    badge.textContent = d.querySelector('#modal:not([hidden])') ? 'pop-up' : (d.querySelector('#msgCount')?.textContent || '').replace(' new', '');
+  }), 500);
+</script>
+</body>
+</html>

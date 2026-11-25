@@ -4,7 +4,8 @@
 import { outline } from './model.js';
 import { openModal } from './ui.js';
 import { emit } from './bus.js';
-import { API } from '../config.js';
+import { API, DEMO } from '../config.js';
+import { scripted } from './demo.js';
 import { S } from './store.js';
 import { scenario } from './scenarios.js';
 
@@ -14,7 +15,7 @@ const ownKey = () => localStorage.getItem('cp_key');
 let server = null; // what the proxy offers: {providers, models, code, left}; null = no proxy reachable
 fetch(API + '/llm').then(r => r.ok && r.json()).then(d => { server = d || null; emit(); }).catch(() => {});
 const viaServer = () => !ownKey() && !!server?.providers[PROVIDER()];
-export const hasKey = () => !!window.__llmStub || !!ownKey() || viaServer(); // the e2e stub counts as a model
+export const hasKey = () => DEMO || !!window.__llmStub || !!ownKey() || viaServer(); // the e2e stub and the demo script count as a model
 window.addEventListener('storage', e => { if (e.key === 'cp_key') emit(); });
 
 // direct: the provider's URL with your key; proxied: the backend with the access code (if the server wants one)
@@ -39,6 +40,7 @@ async function failed(r) {
 
 export async function llm(user, json) {
   if (window.__llmStub) return window.__llmStub(user, json); // e2e.mjs replaces the model with a stub
+  if (DEMO) return scripted(user); // the offline demo: scripted answers (lib/demo.js)
   if (!hasKey()) throw needKey();
   const system = `You are the code-generation engine of CoPrompt, a collaborative natural-language programming notebook.
 Environment: Python 3 in the browser (Pyodide) with pandas, numpy, matplotlib, scipy and scikit-learn (seaborn may be available). ${scenario(S?.scenario).data}

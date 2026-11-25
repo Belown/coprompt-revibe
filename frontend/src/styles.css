@@ -50,6 +50,7 @@ header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px
 #conn{display:inline-flex;align-items:center;gap:8px;margin-right:6px;font-size:13.5px;color:var(--mut)}
 #conn::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--warn);box-shadow:0 0 0 3px var(--warn-soft)}
 #conn[data-s=connected]::before{background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
+#scripted{font-size:13px;font-weight:500;color:var(--link);background:#efebfb;border-radius:999px;padding:4px 10px}
 #conn[data-s=local]::before{background:var(--mut);box-shadow:none}
 #pystat{display:inline-flex;align-items:center;gap:8px;margin-right:6px;font-size:13.5px;color:var(--mut)}
 #pystat::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--warn);box-shadow:0 0 0 3px var(--warn-soft)}

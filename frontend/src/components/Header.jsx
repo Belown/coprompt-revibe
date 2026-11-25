@@ -8,7 +8,7 @@ import { ME, OTHER } from '../lib/util.js';
 import { hasKey, openSettings } from '../lib/llm.js';
 import { ask, toast, openModal } from '../lib/ui.js';
 import { newRoom } from './Join.jsx';
-import { ROOM } from '../config.js';
+import { ROOM, DEMO } from '../config.js';
 
 const CONN = { connecting: 'Connecting…', connected: 'Connected', reconnecting: 'Reconnecting…', local: 'Local mode' };
 const CONN_TIP = {
@@ -59,14 +59,16 @@ export default function Header() {
     <span id="pystat" data-s={ui.py.s}>{ui.py.text}</span>
     <button id="cursors" aria-pressed={ui.cursors} onClick={() => setCursors(!ui.cursors)}
       title="Show other people’s mouse pointers and share yours. Off: neither."><Icon name="pointer" />Live cursors</button>
+    {/* the offline demo has no server to invite anyone to and no model to pay for */}
+    {DEMO ? <span id="scripted" title="Offline demo: a script answers instead of a language model">Scripted model</span> : <>
     <button id="invite" onClick={invite} title="Invite others: a link to copy, or a QR code to scan"><Icon name="share" />Invite</button>
-    <button id="settings" className={key ? undefined : 'needs'} onClick={() => openSettings()}><Icon name="key" />{key ? 'API key' : 'Add API key'}</button>
+    <button id="settings" className={key ? undefined : 'needs'} onClick={() => openSettings()}><Icon name="key" />{key ? 'API key' : 'Add API key'}</button></>}
     {/* session and demo controls: used now and then, so they live behind one button (native popover: Esc / outside click close it) */}
     <button id="morebtn" popoverTarget="more" title="Session and demo" aria-label="Session and demo"><Icon name="more" /></button>
     <div id="more" popover="auto" onClick={e => e.target.closest('button') && e.currentTarget.hidePopover()}>
       <p className="more-room">Session <code>{ROOM}</code></p>
       <button id="other" onClick={() => window.open(otherUrl(), OTHER, 'width=1100,height=900')}><Icon name="external" />Open as {OTHER}</button>
-      <button id="newsession" onClick={newSession} title="Start a new session in a new tab, with a topic of your choice"><Icon name="plus" />New session</button>
+      {!DEMO && <button id="newsession" onClick={newSession} title="Start a new session in a new tab, with a topic of your choice"><Icon name="plus" />New session</button>}
       <hr />
       <button id="reset" onClick={reset}><Icon name="reset" />Reset demo…</button>
     </div>

@@ -32,9 +32,7 @@ Add a DeepSeek key under **API key** in the app. Alternatively, set `DEEPSEEK_AP
 
 The first load downloads Pyodide and its packages, which takes 20–40 s.
 
-**Backup on GitHub Pages:** <https://belown.github.io/coprompt-revibe/app/>, rebuilt on every push that touches `frontend/`. It has no backend, so it runs in local mode: one browser, with **Open as Bob** for the second window, and your own API key.
-
-**Backup on this machine** (the server is down): double-click `offline.cmd`, or run `node scripts/offline.mjs [room]`. It builds the app, runs the sync server and the app on this machine (ports 8787 and 8000, both must be free) and opens Alice's and Bob's windows. It needs no server, but it still needs internet for Pyodide and the LLM. Without a `.env`, enter your key with **API key**: localhost keeps its own key, separate from the deployed site's.
+**Offline demo** (for a talk, in case the server fails): <https://belown.github.io/coprompt-revibe/demo/>, rebuilt on every push that touches `frontend/`; on this machine, double-click `offline.cmd` (or `node scripts/offline.mjs`, which serves it at <http://localhost:8010/demo/>). One page holds Alice's and Bob's views of the app, switched with **Alice / Bob / Side by side** in its top bar. It needs no server and no API key: it runs the Titanic exercise only, both views sync inside the browser, and a script answers instead of the model (`frontend/src/lib/demo.js`). The **Guide** button lists the steps and the prompts the script knows; other prompts get a message instead of code. Pyodide still comes from the CDN. The same mode is `?demo=1` on the app. Checks: `node tests/demo-script.mjs` (the script's answers), and `node ../tests/demo-e2e.mjs` from `frontend/` after `npm run build && npm run preview` (the whole guide in a headless browser).
 
 Tests:
 

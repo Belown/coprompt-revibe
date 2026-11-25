@@ -6,7 +6,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   base: './',
   plugins: [react()],
-  build: { rollupOptions: { input: { blog: 'index.html', app: 'app/index.html' } } },
+  build: { rollupOptions: { input: { blog: 'index.html', app: 'app/index.html', demo: 'demo/index.html' } } },
   server: { port: 8000, strictPort: true },
   preview: { port: 8000, strictPort: true },
 });

@@ -7,7 +7,7 @@ import { uid, ME, debounce, hexcol } from './util.js';
 import { ydoc, awareness, b64, unb64, segs, live } from './ytext.js';
 import { toast } from './ui.js';
 import { local, ws } from './sync.js';
-import { LOCAL, ROOM, TOPIC } from '../config.js';
+import { LOCAL, ROOM, TOPIC, DEMO } from '../config.js';
 import { SCENARIOS } from './scenarios.js';
 
 export let S = null;   // set by the first snapshot; main.jsx waits for `ready` before rendering
@@ -135,7 +135,8 @@ if (LOCAL) goLocal(); else T = ws(onMsg, status, goLocal);
 export function seed(topic = TOPIC) {
   const id = SCENARIOS[topic] ? topic : 'titanic', S = { blocks: {}, actions: {}, scenario: id }; let pos = 0;
   // no author: tasks are free until someone takes one, and a starting prompt belongs to whoever takes its task (model.owner)
-  const H = (text, level) => { const id = uid(); S.blocks[id] = { id, pos: pos += 1000, kind: 'h', level, text, author: null, upd: 0 }; };
+  const owners = DEMO && SCENARIOS[id].owners || {};
+  const H = (text, level) => { const id = uid(); S.blocks[id] = { id, pos: pos += 1000, kind: 'h', level, text, author: owners[text] || null, upd: 0 }; };
   const P = (t, code) => {
     const id = uid(), segs = [{ t: 'text', v: t }];
     S.blocks[id] = { id, pos: pos += 1000, kind: 'p', segs, author: null, editor: null, code, out: null, upd: 0,

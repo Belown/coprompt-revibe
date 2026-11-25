@@ -70,6 +70,7 @@ backend/
 frontend/
   index.html               the blog (placeholder)
   app/index.html           the app page
+  demo/index.html          the offline demo: Alice's and Bob's views in one page, a guide (README, Offline demo)
   public/app/data/         titanic.csv, served at /app/data/
   Dockerfile, Caddyfile    the web container: built frontend + /api proxy
 docker-compose.yml, .env.example   web + sync, for the server
@@ -93,6 +94,7 @@ frontend/src/
     promptDom.js           node chips (DOM) and flash / jump
     python.js, pyWorker.js Pyodide in a Web Worker
     ui.js                  toast and modal services (usable outside React)
+    demo.js                the offline demo's scripted model: an answer for every template, from rules
   components/              one component per paper element
     Editor, PromptBlock, PromptInput, HeadingBlock     block editor (Fig. 3a); PromptInput and HeadingBlock = TipTap + Y.js
     CodeEditor                                          a block's code: CodeMirror + Y.js

@@ -19,6 +19,8 @@ export const SCENARIOS = {
       ['h', '4. Correlation analysis', 3],
       ['h', '5. Deal with outliers', 3],
     ],
+    // who does what in the offline demo (?demo=1), as in the paper's scenario (Fig. 2); elsewhere tasks start free
+    owners: { 'Data Preparation': 'Alice', 'Feature Analysis': 'Bob', '5. Deal with outliers': 'Alice' },
   },
   iris: {
     title: 'Iris: classify flower species',
