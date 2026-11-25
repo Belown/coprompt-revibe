@@ -20,7 +20,7 @@ services:
       PORT: 8787        # Caddyfile proxies to sync:8787
       DATA_DIR: /data
     volumes:
-      # A host folder when HOST_DATA_DIR is set, else the Docker volume "rooms".
+      # A host folder when HOST_DATA_DIR is set (an absolute path: see .env.example), else the Docker volume "rooms".
       - "${HOST_DATA_DIR:-rooms}:/data"
 
   # Auto-deploy: after a push to main, GitHub Actions calls https://<domain>/_deploy, and this pulls main and rebuilds
