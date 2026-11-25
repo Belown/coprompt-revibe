@@ -10,12 +10,19 @@
     "e2e": "node ../tests/e2e.mjs"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
     "@tiptap/core": "^3.35.0",
     "@tiptap/extension-bubble-menu": "^3.35.0",
     "@tiptap/extension-collaboration": "^3.35.0",
     "@tiptap/extension-collaboration-caret": "^3.35.0",
     "@tiptap/extension-document": "^3.35.0",
     "@tiptap/extension-highlight": "^3.35.0",
+    "@tiptap/extension-paragraph": "^3.35.0",
+    "@tiptap/extension-text": "^3.35.0",
     "@tiptap/extensions": "^3.35.0",
     "@tiptap/pm": "^3.35.0",
     "@tiptap/react": "^3.35.0",
@@ -24,6 +31,7 @@
     "qrcode-generator": "^2.0.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "y-codemirror.next": "^0.3.6",
     "y-protocols": "^1.0.7",
     "yjs": "^13.6.33"
   },

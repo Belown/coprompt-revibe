@@ -1,22 +1,41 @@
 // Heading = a task in the multi-level outline. A whole section can be the source of a link or share (§8).
-import { useLayoutEffect, useMemo, useRef, useState, useEffect } from 'react';
+// Its title is collaborative like a prompt: TipTap on the heading's Y.js fragment, with collaborators' carets.
+import { useState, useEffect } from 'react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import { Extension } from '@tiptap/core';
+import Document from '@tiptap/extension-document';
+import Paragraph from '@tiptap/extension-paragraph';
+import Text from '@tiptap/extension-text';
+import Collaboration from '@tiptap/extension-collaboration';
+import { Placeholder } from '@tiptap/extensions';
 import Icon from './Icon.jsx';
 import { Dots, Ctl, Grip, Presence } from './bits.jsx';
+import { carets, editors } from './PromptInput.jsx';
 import { ui, presence } from '../lib/store.js';
-import { ME, debounce, ucol } from '../lib/util.js';
+import { ME, ucol } from '../lib/util.js';
 import { actsOn } from '../lib/model.js';
-import { indent, setHeadingText } from '../lib/blocks.js';
+import { indent } from '../lib/blocks.js';
 import { setSource } from '../lib/mechanisms.js';
-import { DIRTY, caretToEnd } from '../lib/promptDom.js';
+import { headFrag } from '../lib/ytext.js';
+
+const HeadingKeys = Extension.create({ // Enter leaves the title, Tab / Shift+Tab move the heading in or out a level
+  name: 'headingKeys', addOptions: () => ({ bid: null }),
+  addKeyboardShortcuts() {
+    const id = this.options.bid;
+    return { Enter: ({ editor }) => editor.commands.blur(), Tab: () => (indent(id, 1), true), 'Shift-Tab': () => (indent(id, -1), true) };
+  },
+});
 
 export default function HeadingBlock({ b, dnd, rail }) {
-  const id = b.id, ref = useRef(null), [armed, arm] = useState(false);
-  const commit = useMemo(() => debounce(() => { DIRTY.delete(id); setHeadingText(id, ref.current.textContent); }, 300), [id]);
-  useLayoutEffect(() => { // uncontrolled text, synced unless you are typing in it
-    const t = ref.current, focused = document.activeElement === t;
-    if ((!focused || !DIRTY.has(id)) && t.textContent !== b.text) { t.textContent = b.text; if (focused) caretToEnd(t); }
-  });
-  useEffect(() => { if (ui.focus?.id === id) { ref.current.focus(); ui.focus = null; } });
+  const id = b.id, [armed, arm] = useState(false);
+  const editor = useEditor({
+    extensions: [Document.extend({ content: 'paragraph' }), Paragraph, Text, HeadingKeys.configure({ bid: id }),
+      Placeholder.configure({ placeholder: 'Heading' }), Collaboration.configure({ fragment: headFrag(id) }), carets()],
+    editorProps: { attributes: { class: 'htext', 'aria-label': 'Heading', title: 'Tab / Shift+Tab: move in or out a level' } },
+    onFocus: () => presence(id), onBlur: () => presence(null),
+  }, [id]);
+  useEffect(() => { editors.set(id, editor); return () => { editors.delete(id); }; }, [editor, id]);
+  useEffect(() => { if (ui.focus?.id === id && editor) { editor.commands.focus(); ui.focus = null; } });
   const others = Object.entries(ui.PRES).filter(([u, x]) => x === id && u !== ME).map(([u]) => u);
   const cls = ['block', 'hb', others.length && 'here', ui.SOURCE?.b === id && 'is-src', dnd.dragging === id && 'dragging',
     dnd.drop?.id === id && (dnd.drop.after ? 'drop-after' : 'drop-before')].filter(Boolean).join(' ');
@@ -24,12 +43,7 @@ export default function HeadingBlock({ b, dnd, rail }) {
     onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); dnd.start(id); }}
     onDragEnd={() => { arm(false); dnd.end(); }}>
     <Grip arm={arm} />
-    <div ref={ref} className="htext" contentEditable suppressContentEditableWarning title="Tab / Shift+Tab: move in or out a level"
-      onInput={() => { DIRTY.add(id); commit(); }} onFocus={() => presence(id)} onBlur={() => presence(null)}
-      onKeyDown={e => {
-        if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
-        if (e.key === 'Tab') { e.preventDefault(); indent(id, e.shiftKey ? -1 : 1); }
-      }} />
+    <EditorContent editor={editor} className="hi" />
     <Dots types={[...new Set(actsOn(id).map(a => a.type))]} />
     <Presence users={others} />
     <Ctl id={id}>

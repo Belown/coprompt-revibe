@@ -5,6 +5,7 @@ import Wiki from './components/Wiki.jsx';
 import Messages from './components/Messages.jsx';
 import { Modal, Toasts } from './components/Overlays.jsx';
 import { nodeFromWord, editorOf } from './components/PromptInput.jsx';
+import { codeViewOf } from './components/CodeEditor.jsx';
 import { subscribe, getVersion, emit } from './lib/bus.js';
 import Cursors from './components/Cursors.jsx';
 import { S, ui, put, presence, unseen, sendCursor, yFlush } from './lib/store.js';
@@ -24,7 +25,7 @@ const useStore = () => useSyncExternalStore(subscribe, getVersion);
 
 // test hook for e2e.mjs (drives the app through the same functions the UI calls)
 window.cp = { get S() { return S; }, ui, put, ordered, text, label, members, T, mech, setSource, commitCode, generate, promptFromCode,
-  addBlock, moveBlock, setPromptText, indent, run, pyRun, jump, segs, nodeFromWord, editorOf, awareness };
+  addBlock, moveBlock, setPromptText, indent, run, pyRun, jump, segs, nodeFromWord, editorOf, codeViewOf, awareness };
 
 onModalClosed(checkShares);
 

@@ -79,7 +79,9 @@ frontend/src/
     bus.js                 change counter; React subscribes with useSyncExternalStore
     store.js               shared notebook S, put/LWW, Y.js send/receive, presence/busy/cursors, "seen" record, seed/reset, reconnect merge
     sync.js                transports: WebSocket to the backend, BroadcastChannel + localStorage fallback
-    ytext.js               prompt text in Y.js: segs() / setSegs() / renameNode(), the awareness for text cursors
+    ytext.js               everything typed, in Y.js: prompts (segs / setSegs / renameNode), code and heading titles (b.code / b.text
+                           via live()), the awareness for text cursors
+    scenarios.js           topics for new sessions: dataset, starting outline, what the LLM is told about the data
     model.js               read-only views: ordered, text, label, members (heading → section), provider, codeAbove, …
     templates.js           Fig. 12–15 templates (+ Fig. 14–15 few-shot examples) and our refer/share/explain/describe ones
     llm.js                 DeepSeek / Anthropic client, settings dialog
@@ -90,7 +92,8 @@ frontend/src/
     python.js, pyWorker.js Pyodide in a Web Worker
     ui.js                  toast and modal services (usable outside React)
   components/              one component per paper element
-    Editor, PromptBlock, PromptInput, HeadingBlock     block editor (Fig. 3a); PromptInput = TipTap + Y.js, selection toolbar
+    Editor, PromptBlock, PromptInput, HeadingBlock     block editor (Fig. 3a); PromptInput and HeadingBlock = TipTap + Y.js
+    CodeEditor                                          a block's code: CodeMirror + Y.js
     Cursors                                             opt-in live mouse pointers
     Wiki                                                Prompt Wiki (Fig. 3b)
     Messages                                            message panel (Fig. 3c)
@@ -140,10 +143,10 @@ The library owns the state, and React re-renders on every change. Two places del
 |---|---|---|
 | GPT-4 via OpenAI | DeepSeek (`deepseek-flash`, OpenAI-compatible API; Claude optional), called directly from the browser | The original model is a moving target anyway. Using the same templates keeps the comparison fair-ish. |
 | Next.js + React + TypeScript, LLM calls through a server-side route | Vite + React, plain JavaScript. LLM calls go from the browser with the user's own key, or through our small proxy with the server's key | Participants can try it without a key; with their own key nothing goes through the server. JavaScript kept the port from the single-file prototype small. |
-| TipTap/ProseMirror + Y.js CRDT + Hocuspocus server + Firebase RTDB/Firestore | Prompts: TipTap + Y.js, as in the paper, but merged and relayed by our own small WebSocket server (Node + `ws`, one JSON file per room) instead of Hocuspocus. Blocks and actions (the paper's Firebase RTDB part): per-object last-writer-wins on the same server. `BroadcastChannel` + localStorage as the fallback | One server for everything. Heading text and code are still last-writer-wins: code changes on blur or by the LLM, and headings are short. Offline editing is not a goal (everyone is online); edits made during a short disconnect are resent on reconnect. |
+| TipTap/ProseMirror + Y.js CRDT + Hocuspocus server + Firebase RTDB/Firestore | Everything people type is Y.js, as in the paper: prompts and heading titles in TipTap, code in CodeMirror (`y-codemirror.next`), each with collaborators' carets. It is merged and relayed by our own small WebSocket server (Node + `ws`, one JSON file per room) instead of Hocuspocus. Blocks and actions (the paper's Firebase RTDB part: order, levels, outputs, history, mechanisms) are per-object last-writer-wins on the same server. `BroadcastChannel` + localStorage as the fallback | One server for everything. Offline editing is not a goal (everyone is online); edits made during a short disconnect are resent on reconnect. A manual code edit is versioned and checked against links and requests once, when its author leaves the code, not on every keystroke. |
 | Rich-text toolbar (Fig. 4a) | The same marks (bold, italic, underline, strikethrough, code, highlight) plus **Make node**, in a toolbar that appears over a selection | Formatting is kept in Y.js and shown to everyone; the model sees the plain text. A mechanism that rewrites a whole prompt drops its formatting. |
 | Real-time cursors and text selections (§6) | Collaborators' text cursors (with their name) and selections inside prompts, always on. In addition, opt-in live **mouse pointers** (header toggle) | The mouse pointers go beyond the paper, so they are off until each user turns them on. |
-| Pyodide in a Web Worker | Also a Web Worker, but **Run re-executes every block above in a fresh namespace** | This is deterministic and avoids stale or partial kernel state, which the paper never specifies. |
+| Pyodide in a Web Worker | Also a Web Worker. **Run executes the chain of blocks above in a fresh namespace, with a run cache**: the worker keeps a copy of the namespace after each block of the chain it ran last, so a run whose blocks above are unchanged starts from that copy. The block itself always re-runs from the state before it. A namespace holding functions or classes defined in a block is not cached (a copy would still point at the old namespace), so from there it runs from the top | Deterministic, like re-running from the top, without its cost when you work down the notebook. The paper never specifies how execution state is shared. |
 | Server-side logging (Firestore) | None | Logging is not part of the interaction. |
 | Icon-only mechanism buttons | Coloured word pills (icon + word: refer, request, share, link) | Easier for the audience to read. |
 | Fig. 15 request output = `{id, index, fulfilled}`, with the chain-of-thought as prose *before* the JSON in its example | A `reasoning` field before `fulfilled`, inside the JSON; the example's reasoning sentences moved into that field | Same chain-of-thought, but the reply stays parseable JSON. |

@@ -7,7 +7,15 @@ export const ME = new URLSearchParams(location.search).get('user') || 'Alice';
 export const OTHER = ME === 'Alice' ? 'Bob' : 'Alice';
 const UC = { Alice: 'var(--alice)', Bob: 'var(--bob)' };
 // anyone beyond the paper's two: a stable hue from the name
-export const ucol = u => UC[u] || (u ? `hsl(${[...u].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7)} 55% 42%)` : 'var(--ok)');
+const hue = u => [...u].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+export const ucol = u => UC[u] || (u ? `hsl(${hue(u)} 55% 42%)` : 'var(--ok)');
+// the same colour as #rrggbb, for what needs a hex value (CodeMirror's carets)
+export function hexcol(u) {
+  if (u === 'Alice') return '#c33a66'; if (u === 'Bob') return '#2d62c4'; if (!u) return '#1f7a4d';
+  const h = hue(u), l = .42, a = .55 * Math.min(l, 1 - l);
+  const f = n => { const k = (n + h / 30) % 12; return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))).toString(16).padStart(2, '0'); };
+  return '#' + f(0) + f(8) + f(4);
+}
 
 export const MECH = {
   refer:   { c: 'var(--refer)',   tip: 'Refer: rebuild MY source prompt from this prompt’s (or section’s) code + result', does: 'rebuild my prompt from the target' },

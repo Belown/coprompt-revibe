@@ -80,6 +80,14 @@ try {
   await A.ev(`window.__busy = pyRun(['import time\\nt = time.time()\\nwhile time.time() - t < 3: pass']); 1`);
   const t0 = Date.now(); await A.ev('1 + 1'); const dt = Date.now() - t0;
   check(dt < 1000, `page answers within ${dt} ms while Python busy-loops for 3 s`);
+  // run cache: an unchanged prefix is reused, the block itself always re-runs from the state before it,
+  // and a block that defines a function turns caching off from there (a copy would point at the old namespace)
+  check(await A.ev(`(async()=>{ await __busy; const a = await pyRun(['x = 1', 'x = x + 1', 'print(x)']), b = await pyRun(['x = 1', 'x = x + 1', 'print(x)']),
+    c = await pyRun(['x = 1', 'x = x + 1', 'y = x * 10', 'print(y)']);
+    return JSON.stringify([a.res.reused, a.res.text, b.res.reused, b.res.text, c.res.reused, c.res.text]); })()`) === JSON.stringify([0, '2\n', 2, '2\n', 2, '20\n']),
+    'run cache: reuses the unchanged blocks above, never applies a block twice');
+  check(await A.ev(`(async()=>{ const a = await pyRun(['def f(): return z', 'z = 1', 'print(f())']), b = await pyRun(['def f(): return z', 'z = 5', 'print(f())']);
+    return JSON.stringify([b.res.reused, b.res.text]); })()`) === JSON.stringify([0, '5\n']), 'run cache: a block defining a function is not cached (stays correct)');
   await A.ev('__busy.then(() => 1)');
   check(await B.ev(`until(() => S.blocks[byText('load data').id].out?.text.includes('PassengerId'))`), 'execution output synced to Bob');
 
@@ -170,8 +178,8 @@ try {
   check(await A.ev(`__last.edit.includes('shared with this task') && __last.edit.includes('correlation')`), 'shared task context reaches an EDITED prompt too (gap 7)');
   // gap 5: code-first block → prompt written from the comments
   const cId = await A.ev(`addBlock('c', byText('drop columns').id)`);
-  check(await A.ev(`until(() => document.activeElement === el('${cId}')?.querySelector('textarea') && !el('${cId}').querySelector('.p2c').hidden)`), 'code block focuses its code area and offers “Prompt from code”');
-  await A.ev(`(async()=>{ const t = el('${cId}').querySelector('textarea'); t.value = "# mean age per passenger class\\nprint(df.groupby('Pclass')['Age'].mean())"; t.blur(); await tick(); el('${cId}').querySelector('.p2c').click(); return until(() => text(S.blocks['${cId}'])); })()`);
+  check(await A.ev(`until(() => document.activeElement === el('${cId}')?.querySelector('.cm-content') && !el('${cId}').querySelector('.p2c').hidden)`), 'code block focuses its code area and offers “Prompt from code”');
+  await A.ev(`(async()=>{ S.blocks['${cId}'].code = "# mean age per passenger class\\nprint(df.groupby('Pclass')['Age'].mean())"; await tick(); el('${cId}').querySelector('.p2c').click(); return until(() => text(S.blocks['${cId}'])); })()`);
   check(await B.ev(`until(() => text(S.blocks['${cId}']) === 'print the mean age per passenger class in df' && S.blocks['${cId}'].code.includes('groupby'))`), 'prompt generated from code comments, synced (gap 5)');
   check(await A.ev(`until(() => el('${cId}').querySelector('.p2c').hidden && S.blocks['${cId}'].hist.at(-1).action === 'prompt from code')`), 'prompt-from-code is versioned; the button hides once a prompt exists');
   // gap 6: comments
@@ -213,6 +221,24 @@ try {
   check(await A.ev(both) && await B.ev(both), 'two people typing in one prompt at once: both edits are kept (Y.js)');
   check(await A.ev(`until(() => [...el('${dc}').querySelectorAll('.ccaret-l')].some(x => x.textContent === 'Bob'))`), 'Bob’s text cursor shows in Alice’s copy of the prompt');
   for (const P of [A, B]) await P.ev(`(()=>{ const e = editorOf('${dc}'); e.commands.blur(); e.view.dom.dispatchEvent(new FocusEvent('blur')); return 1; })()`);
+  // code and heading titles are collaborative too: concurrent edits merge
+  const lc = await A.ev(`byText('load data').id`);
+  await Promise.all([
+    A.ev(`(()=>{ const v = codeViewOf('${lc}'); v.dispatch({ changes: { from: 0, insert: '# by Alice\\n' } }); return 1; })()`),
+    B.ev(`(()=>{ const v = codeViewOf('${lc}'); v.dispatch({ changes: { from: v.state.doc.length, insert: '\\n# by Bob' } }); return 1; })()`),
+  ]);
+  const bothCode = `until(() => { const c = S.blocks['${lc}'].code; return c.startsWith('# by Alice\\n') && c.endsWith('\\n# by Bob') && codeViewOf('${lc}').state.doc.toString() === c; })`;
+  check(await A.ev(bothCode) && await B.ev(bothCode), 'two people editing one code block at once: both edits kept, in both editors');
+  const h3 = await A.ev(`hid('3. Feature')`);
+  await Promise.all([
+    A.ev(`(()=>{ const e = editorOf('${h3}'); e.view.focus(); e.commands.setTextSelection(1); e.commands.insertContent('Step '); return 1; })()`),
+    B.ev(`(()=>{ const e = editorOf('${h3}'); e.view.focus(); e.commands.setTextSelection(e.state.doc.content.size - 1); e.commands.insertContent(' (Bob)'); return 1; })()`),
+  ]);
+  const bothHead = `until(() => S.blocks['${h3}'].text === 'Step 3. Feature transformation (Bob)' && [...document.querySelectorAll('#wiki .wh .wtext')].some(x => x.textContent === 'Step 3. Feature transformation (Bob)'))`;
+  check(await A.ev(bothHead) && await B.ev(bothHead), 'two people typing in one heading at once: both kept, and the wiki follows');
+  for (const P of [A, B]) await P.ev(`(()=>{ const e = editorOf('${h3}'); e.commands.blur(); e.view.dom.dispatchEvent(new FocusEvent('blur')); return 1; })()`);
+  await A.ev(`S.blocks['${h3}'].text = '3. Feature transformation'; 1`); // later steps find it by its title
+  await A.ev(`(()=>{ const v = codeViewOf('${lc}'); v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: "import pandas as pd\\ndf = pd.read_csv('data/titanic.csv')\\ndf.head()" } }); return 1; })()`);
   // earlier bug fixes: trailing space trimmed; deleted blocks silence links
   const tId = await A.ev(`newPrompt('5. Deal with outliers', 'remove outliers of df using IQR')`);
   const sel = (w, n) => `const e = editorOf('${tId}'); let pos = -1; e.state.doc.descendants((x, p) => { if (x.isText && x.text.includes('${w}')) pos = p + x.text.indexOf('${w}'); }); e.view.focus(); e.commands.setTextSelection({ from: pos, to: pos + ${n} });`;
@@ -229,6 +255,9 @@ try {
   check(await A.ev(`(async()=>{ const id = byText('drop columns').id; el(id).querySelector('[aria-label=History]').click(); await until(() => el(id).querySelector('.hrow')); el(id).querySelector('.hrow').click(); return until(() => el(id).querySelector('.dcode')); })()`), 'history diff renders');
   check(await A.ev(`document.querySelectorAll('#wiki .dots i').length > 0 && document.querySelectorAll('#msgs .msg').length >= 6`), 'wiki dots + message panel populated');
 
+  check(await A.ev(`(async()=>{ document.querySelector('#wikiCard .help').click(); await until(() => document.querySelector('#modal .mhelp'));
+    const ok = [...document.querySelectorAll('#modal .mh-list dt')].map(d => d.textContent).join() === 'refer,request,share,link';
+    document.querySelector('#modal .btns .primary').click(); await until(() => !document.querySelector('#modal .dlg')); return ok; })()`), 'the ? in the Prompt Wiki explains the four mechanisms');
   // invite: a pop-up with a QR code and the link (same session, no user) to copy
   check(await A.ev(`(async()=>{ document.querySelector('#invite').click(); await until(() => document.querySelector('#modal .qr'));
     const m = document.querySelector('#modal'), url = m.querySelector('.copyrow input').value, ok = m.querySelector('.qr').src.startsWith('data:image/svg+xml')

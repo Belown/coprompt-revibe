@@ -1,18 +1,25 @@
-// Prompt text is collaborative (§6.3: a Y.js CRDT, so two people typing in one prompt merge). One Y.Doc per room,
-// one XmlFragment 'p:<block id>' per prompt block, bound to its TipTap editor (components/PromptInput.jsx).
-// Everything else (mechanisms, wiki, LLM templates, history) keeps working with plain segments,
-// [{t: 'text', v}, {t: 'node', id, v}], read with segs() and written with setSegs() / renameNode().
+// Everything people type is collaborative (§6.3: a Y.js CRDT, so two people typing in one place merge). One Y.Doc
+// per room, holding for each prompt block its prompt, an XmlFragment 'p:<id>' (TipTap, components/PromptInput.jsx),
+// and its code, a Y.Text 'c:<id>' (CodeMirror, components/CodeEditor.jsx); for each heading its title, an XmlFragment
+// 'h:<id>' (TipTap, components/HeadingBlock.jsx).
+// Mechanisms, wiki, LLM templates and history keep working with plain values: a prompt as segments,
+// [{t: 'text', v}, {t: 'node', id, v}], read with segs() and written with setSegs() / renameNode(); code and heading
+// text as b.code and b.text, which live() turns into accessors of the Y.js text.
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 
 export const ydoc = new Y.Doc();
 export const awareness = new Awareness(ydoc); // text cursors and selections (CollaborationCaret)
 export const frag = id => ydoc.getXmlFragment('p:' + id);
+export const codeText = id => ydoc.getText('c:' + id);
+export const headFrag = id => ydoc.getXmlFragment('h:' + id);
+const plain = f => segsOf(f).map(s => s.v).join('');
 
-export function segs(id) {
+export const segs = id => segsOf(frag(id));
+function segsOf(f) {
   const out = [];
   const add = v => { if (!v) return; if (out.at(-1)?.t === 'text') out.at(-1).v += v; else out.push({ t: 'text', v }); };
-  frag(id).toArray().forEach((p, i) => {
+  f.toArray().forEach((p, i) => {
     if (!(p instanceof Y.XmlElement)) return;
     if (i) add(' '); // pasted lines read as one prompt
     for (const c of p.toArray()) {
@@ -40,20 +47,38 @@ export function setSegs(id, s) {
   ydoc.transact(() => { f.delete(0, f.length); f.insert(0, [paragraph(s)]); });
 }
 
+function replaceText(t, v) { if (t.toString() !== v) ydoc.transact(() => { t.delete(0, t.length); t.insert(0, v); }); }
+function setHeading(id, v) { const f = headFrag(id); if (plain(f) !== v) ydoc.transact(() => { f.delete(0, f.length); f.insert(0, [paragraph([{ t: 'text', v }])]); }); }
+
+// b.code (prompt block) and b.text (heading) read and write the Y.js text, so every caller sees what is typed live and
+// a write (an LLM answer, a restore) merges like typing. Not enumerable: the synced block object no longer carries them.
+// Called on every block that enters S (lib/store.js).
+export function live(b) {
+  const f = b?.kind === 'p' ? 'code' : b?.kind === 'h' ? 'text' : null;
+  if (!f || Object.getOwnPropertyDescriptor(b, f)?.get) return b;
+  Object.defineProperty(b, f, f === 'code'
+    ? { get: () => codeText(b.id).toString(), set: v => replaceText(codeText(b.id), String(v ?? '')), enumerable: false, configurable: true }
+    : { get: () => plain(headFrag(b.id)), set: v => setHeading(b.id, String(v ?? '')), enumerable: false, configurable: true });
+  return b;
+}
+
 // Rename one node chip in place, so the rest of the prompt (and its formatting) is untouched.
 export function renameNode(id, nid, v) {
   for (const p of frag(id).toArray()) for (const c of p.toArray?.() || [])
     if (c instanceof Y.XmlElement && c.nodeName === 'promptNode' && c.getAttribute('id') === nid) c.setAttribute('v', v);
 }
 
-// What backend/server.js does for a room: write each prompt block's starting segs once (marked in the 'init' map).
-// Used by the local (no server) transport, which plays the server.
+// What backend/server.js does for a room: write each block's starting prompt, code and heading text once (marked in
+// the 'init' map). Used by the local (no server) transport, which plays the server. Same as initTexts() there.
 export function initTexts(doc, S) {
-  const done = doc.getMap('init');
+  const done = doc.getMap('init'), once = (key, f) => { if (!done.has(key)) { done.set(key, true); f(); } };
   doc.transact(() => {
-    for (const b of Object.values(S.blocks)) if (b?.kind === 'p' && !done.has(b.id)) {
-      done.set(b.id, true);
-      if (b.segs?.length) doc.getXmlFragment('p:' + b.id).insert(0, [paragraph(b.segs)]);
+    for (const b of Object.values(S.blocks)) {
+      if (b?.kind === 'p') {
+        once(b.id, () => { if (b.segs?.length) doc.getXmlFragment('p:' + b.id).insert(0, [paragraph(b.segs)]); });
+        once('c:' + b.id, () => { if (typeof b.code === 'string' && b.code) doc.getText('c:' + b.id).insert(0, b.code); });
+      }
+      if (b?.kind === 'h') once('h:' + b.id, () => { if (typeof b.text === 'string' && b.text) doc.getXmlFragment('h:' + b.id).insert(0, [paragraph([{ t: 'text', v: b.text }])]); });
     }
   });
 }

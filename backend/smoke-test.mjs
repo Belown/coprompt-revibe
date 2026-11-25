@@ -97,8 +97,11 @@ try {
   assert.equal((await F.next('y')).aw, 'AQ==', "and the others' current awareness");
   F.ws.close();
 
-  A.send({ t: 'reset', S: { blocks: { r: { id: 'r', upd: 0 }, rp: { id: 'rp', kind: 'p', upd: 0, segs: [{ t: 'text', v: 'load ' }, { t: 'node', id: 'n1', v: 'df' }] } }, actions: {} } });
+  A.send({ t: 'reset', S: { blocks: { r: { id: 'r', upd: 0 }, rp: { id: 'rp', kind: 'p', upd: 0, segs: [{ t: 'text', v: 'load ' }, { t: 'node', id: 'n1', v: 'df' }], code: 'df = 1' }, rh: { id: 'rh', kind: 'h', upd: 0, level: 1, text: 'Intro' } }, actions: {} } });
   const yr = await B.next('y');
+  { const d = new Y.Doc(); Y.applyUpdate(d, Buffer.from(yr.u, 'base64'));
+    assert.equal(d.getText('c:rp').toString(), 'df = 1', "reset: the server writes the new blocks' code");
+    assert.equal(d.getXmlFragment('h:rh').toString(), '<paragraph>Intro</paragraph>', "and the headings' titles"); }
   assert.equal(ytext(yr.u, 'rp'), '<paragraph>load <promptnode id="n1" v="df"></promptnode></paragraph>', "reset: the server writes the new prompts' text");
   assert.equal((await B.next('reset')).epoch, 1);
   assert.equal((await A.next('reset')).epoch, 1);

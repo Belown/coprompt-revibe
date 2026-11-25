@@ -36,5 +36,4 @@ export function indent(id, d) {
   if (lv < 1 || lv > (above?.level ?? 0) + 1) return;
   for (const x of [b, ...section(id).filter(x => x.kind === 'h')]) { x.level += d; put('blocks', x); }
 }
-export function setHeadingText(id, t) { const b = S.blocks[id]; b.text = t; put('blocks', b); }
 export function setPromptText(id, t) { setSegs(id, t ? [{ t: 'text', v: t }] : []); const b = S.blocks[id]; b.editor = ME; put('blocks', b); }

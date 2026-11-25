@@ -8,6 +8,34 @@ import { ordered, actsOn, label, depths } from '../lib/model.js';
 import { mech, targetKinds } from '../lib/mechanisms.js';
 import { jump } from '../lib/promptDom.js';
 import { segs } from '../lib/ytext.js';
+import { openModal } from '../lib/ui.js';
+
+// "?" next to the Wiki's title: what the four mechanisms do, and how to use one
+const HELP = {
+  refer: ['Rebuild my prompt and code from theirs.', 'My step needs something a collaborator already made.',
+    'My heatmap prompt uses df. I refer to Alice’s encoding prompt, and mine switches to df_encoded, with new code.'],
+  request: ['Ask the owner to finish their step. My block regenerates when it is done, and again whenever it changes.',
+    'I need a result that does not exist yet.', 'I ask Alice to remove the outliers; my plot updates once she has.'],
+  share: ['Offer my source to the owner of the target. They get a pop-up; if they accept, their code regenerates with it.',
+    'I have a result or a hint that someone else should use.', 'I share my cleaned df with Bob’s model prompt.'],
+  link: ['Keep both sides in sync: when either side’s code changes, the other is checked and updated.',
+    'Two prompts must agree on a name or a value.', 'I rename df_encoded to df_num; Bob’s prompt follows by itself.'],
+};
+function MechHelp() {
+  return <div className="mhelp">
+    <ol className="mh-steps">
+      <li>In <b>your</b> prompt, select a word and click <b>Make node</b> (or <Icon name="node" /> for the whole prompt, or <b>source</b> on a heading for a whole section).</li>
+      <li>In the Prompt Wiki, find the target: someone else’s prompt, a word in it, or a heading.</li>
+      <li>Click one of the four icons on that row. You can add a short note; it is sent with it.</li>
+    </ol>
+    <dl className="mh-list">{Object.entries(HELP).map(([t, [what, when, ex]]) => <div key={t} style={{ '--c': MECH[t].c }}>
+      <dt><Icon name={t} />{t}</dt>
+      <dd><p>{what}</p><p><span className="mh-k">Use it when</span> {when}</p><p className="mh-ex"><span className="mh-k">Example</span> {ex}</p></dd>
+    </div>)}</dl>
+    <p className="muted">Everything you send or receive is listed under <b>Messages</b>. A coloured dot on a prompt or node shows which mechanisms it takes part in; click a purple link dot to unlink.</p>
+  </div>;
+}
+const help = () => openModal({ title: 'Refer, request, share, link', node: <MechHelp />, ok: 'Got it', cancel: null });
 
 const types = (b, n) => [...new Set(actsOn(b, n).map(a => a.type))];
 
@@ -58,7 +86,8 @@ export default function Wiki() {
     }
   }
   return <section className="pane" id="wikiCard">
-    <h2 className="pane-h"><Icon name="tree" />Prompt Wiki</h2>
+    <h2 className="pane-h"><Icon name="tree" />Prompt Wiki
+      <button className="help" onClick={help} title="What do refer, request, share and link do?" aria-label="What do refer, request, share and link do?">?</button></h2>
     <div className="pane-b">
       <div className="legend">{Object.keys(MECH).map(t => <span key={t} className="lg" style={{ '--c': MECH[t].c }} title={MECH[t].tip}><MechTag t={t} /></span>)}</div>
       <p className="howto">Select a phrase in your prompt and choose <b>Make node</b> (or use a whole prompt or section as the source), then pick a mechanism on a target below.</p>

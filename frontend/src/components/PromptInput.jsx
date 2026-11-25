@@ -14,13 +14,13 @@ import { Placeholder } from '@tiptap/extensions';
 import Icon from './Icon.jsx';
 import { S, ui, put, presence } from '../lib/store.js';
 import { emit } from '../lib/bus.js';
-import { ME, ucol, uid } from '../lib/util.js';
+import { ME, ucol, uid, hexcol } from '../lib/util.js';
 import { generate, snapPrompt } from '../lib/codegen.js';
 import { ask, toast } from '../lib/ui.js';
 import { frag, awareness, renameNode } from '../lib/ytext.js';
 import { TYPED, chipEl, decorateChip } from '../lib/promptDom.js';
 
-const editors = new Map(); // block id -> its editor, for the e2e hooks below
+export const editors = new Map(); // block id -> its TipTap editor (prompts and headings), for the e2e hooks below
 export const editorOf = id => editors.get(id);
 
 const PromptNode = Node.create({
@@ -49,6 +49,8 @@ const caret = user => {
   return c;
 };
 const selection = user => ({ class: 'csel', style: `--who: ${ucol(who(user))}` });
+// the same carets for every TipTap editor (prompts here, heading titles in HeadingBlock)
+export const carets = () => CollaborationCaret.configure({ provider: { awareness }, user: { name: ME, color: hexcol(ME) }, render: caret, selectionRender: selection });
 
 // Make node: the selected phrase (outer spaces trimmed) becomes a chip and the source node
 export function makeNode(editor, id) {
@@ -87,7 +89,7 @@ export default function PromptInput({ b }) {
       Highlight, PromptNode.configure({ bid: id }), EnterGenerates.configure({ bid: id }),
       Placeholder.configure({ placeholder: 'Describe in plain English what this block should do…' }),
       Collaboration.configure({ fragment: frag(id) }),
-      CollaborationCaret.configure({ provider: { awareness }, user: { name: ME }, render: caret, selectionRender: selection }),
+      carets(),
     ],
     editorProps: { attributes: { class: 'prompt', 'aria-label': 'Prompt' } },
     onFocus: () => presence(id),

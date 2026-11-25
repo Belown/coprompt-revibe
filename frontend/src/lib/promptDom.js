@@ -4,7 +4,6 @@ import { ui } from './store.js';
 import { MECH } from './util.js';
 import { actsOn } from './model.js';
 
-export const DIRTY = new Set(); // headings with local typing not yet committed
 export const TYPED = new Set(); // prompts typed into since focus (for prompt-only history versions)
 
 export function chipEl(s, title = 'Click: use as source node · Double-click: rename') {
@@ -27,7 +26,6 @@ export function decorateChip(c, bid) {
   c.style.borderColor = types.length ? MECH[types[0]].c : '';
   c.classList.toggle('src', ui.SOURCE?.n === c.dataset.n);
 }
-export function caretToEnd(el) { const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
 
 // motion through the Web Animations API, so React re-rendering className never cuts an animation short
 const EASE = 'cubic-bezier(.16,1,.3,1)';

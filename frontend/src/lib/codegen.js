@@ -24,8 +24,9 @@ export async function generate(id) {
 }
 
 // code-first block (§6.3: "initiate a code block and manually input code, pausing midway to generate a prompt block from the code comments")
-export async function promptFromCode(id, typed) {
-  if (typed != null && typed !== S.blocks[id].code) { S.blocks[id].editor = ME; await commitCode(id, typed, 'edit code'); }
+export async function promptFromCode(id) {
+  const b0 = S.blocks[id]; // code typed but not versioned yet (leaving the code area versions it; this covers the rest)
+  if (b0.code !== (b0.hist?.at(-1)?.code ?? '')) { b0.editor = ME; await commitCode(id, b0.code, 'edit code'); }
   if (!S.blocks[id].code.trim()) return toast('Write some code (with comments) first.');
   if (ui.BUSY[id]) return;
   busy(id, 'writing the prompt from the code comments…');

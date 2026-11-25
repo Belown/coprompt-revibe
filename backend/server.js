@@ -42,14 +42,19 @@ function paragraph(segs) {
   }));
   return p;
 }
-// A prompt block's starting text (the seed's, or a room saved before prompts were Y.js) goes into its fragment once,
-// here on the server, so two clients can never both write it (which would duplicate it).
+// A block's starting text (the seed's, or a room saved before this text was Y.js) goes into Y.js once, here on the
+// server, so two clients can never both write it (which would duplicate it): a prompt into 'p:<id>', its code into
+// 'c:<id>', a heading's title into 'h:<id>'. Same as initTexts() in frontend/src/lib/ytext.js.
 function initTexts(r) {
-  const done = r.ydoc.getMap('init');
-  r.ydoc.transact(() => {
-    for (const b of Object.values(r.S.blocks)) if (b?.kind === 'p' && typeof b.id === 'string' && !done.has(b.id)) {
-      done.set(b.id, true);
-      if (Array.isArray(b.segs) && b.segs.length) r.ydoc.getXmlFragment('p:' + b.id).insert(0, [paragraph(b.segs)]);
+  const doc = r.ydoc, done = doc.getMap('init'), once = (key, f) => { if (!done.has(key)) { done.set(key, true); f(); } };
+  doc.transact(() => {
+    for (const b of Object.values(r.S.blocks)) {
+      if (typeof b?.id !== 'string') continue;
+      if (b.kind === 'p') {
+        once(b.id, () => { if (Array.isArray(b.segs) && b.segs.length) doc.getXmlFragment('p:' + b.id).insert(0, [paragraph(b.segs)]); });
+        once('c:' + b.id, () => { if (typeof b.code === 'string' && b.code) doc.getText('c:' + b.id).insert(0, b.code); });
+      }
+      if (b.kind === 'h') once('h:' + b.id, () => { if (typeof b.text === 'string' && b.text) doc.getXmlFragment('h:' + b.id).insert(0, [paragraph([{ t: 'text', v: b.text }])]); });
     }
   }, 'server');
 }

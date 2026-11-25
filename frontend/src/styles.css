@@ -81,6 +81,20 @@ aside{position:sticky;top:90px;display:flex;flex-direction:column;height:calc(10
 #msgCard{flex:2 1 0;border-top:1px solid var(--line)}
 .pane-h{display:flex;align-items:center;gap:8px;padding:14px 18px 8px;margin:0;font-size:15px;font-weight:600}
 .pane-h .ic{color:var(--mut)}
+.pane-h .help{margin-left:auto;width:24px;height:24px;padding:0;border-radius:50%;font-size:13px;font-weight:700;color:var(--mut)}
+.pane-h .help:hover{color:var(--ink)}
+/* "?" in the Wiki: the four mechanisms */
+.dlg:has(.mhelp){width:min(620px,100%);max-height:calc(100vh - 32px);overflow:auto}
+.mhelp{display:flex;flex-direction:column;gap:14px}
+.mh-steps{margin:0;padding-left:20px;font-size:14.5px;line-height:1.55;color:var(--ink-2)}
+.mh-steps .ic{vertical-align:-3px}
+.mh-list{display:flex;flex-direction:column;gap:10px;margin:0}
+.mh-list div{display:grid;grid-template-columns:92px 1fr;gap:12px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--c) 30%,white);border-radius:10px;background:color-mix(in srgb,var(--c) 5%,white)}
+.mh-list dt{display:flex;align-items:center;gap:6px;font-weight:700;color:var(--c)}
+.mh-list dd{margin:0;display:flex;flex-direction:column;gap:4px}
+.dlg .mh-list p{font-size:14px;line-height:1.5}
+.dlg .mh-list .mh-ex{color:var(--mut)}
+.mh-k{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);margin-right:4px}
 .pane-b{flex:1;min-height:0;overflow:auto;padding:0 10px 12px}
 #msgCount{margin-left:auto;font-size:12px;font-weight:600;color:#fff;background:var(--err);border-radius:999px;padding:2px 9px}
 #msgCount:empty{display:none}
@@ -118,7 +132,10 @@ aside{position:sticky;top:90px;display:flex;flex-direction:column;height:calc(10
 /* headings: size by depth, not by level number */
 .hb{background:none;border-color:transparent;box-shadow:none;padding:20px 0 0;display:flex;align-items:center;gap:10px}
 .hb[data-d="0"]{padding-top:4px}
-.htext{flex:1;outline:none;font-size:17px;line-height:1.35;font-weight:600;letter-spacing:-.005em;border-radius:8px;padding:2px 8px;margin-left:-8px;text-wrap:balance}
+.hi{flex:1;min-width:0}
+.htext p{margin:0}
+.htext p.is-editor-empty:first-child::before{content:attr(data-placeholder);float:left;height:0;pointer-events:none;color:var(--faint)}
+.htext{outline:none;font-size:17px;line-height:1.35;font-weight:600;letter-spacing:-.005em;border-radius:8px;padding:2px 8px;margin-left:-8px;text-wrap:balance}
 .htext:hover{background:var(--hover)}
 .htext:focus{background:var(--surface);box-shadow:0 0 0 1px var(--line-2)}
 .hb[data-d="0"] .htext{font-size:30px;line-height:1.2;font-weight:700;letter-spacing:-.025em}
@@ -158,10 +175,15 @@ aside{position:sticky;top:90px;display:flex;flex-direction:column;height:calc(10
 .presence:not(:empty){position:absolute;top:-12px;right:16px;z-index:1;display:inline-flex;align-items:center;gap:5px;padding:2px 10px 2px 8px;
   font-size:12.5px;font-weight:600;color:#fff;border-radius:999px;box-shadow:var(--sh-1)}
 .presence .ic{width:13px;height:13px}
-textarea.code{display:block;width:100%;margin-top:10px;font:400 14px/1.6 var(--mono);font-variant-ligatures:none;color:var(--ink);
-  background:var(--sunken);border:1px solid var(--line);border-radius:9px;padding:10px 13px;resize:vertical;tab-size:4;transition:background .15s,border-color .15s,box-shadow .15s}
-textarea.code:focus{outline:none;background:var(--surface);border-color:var(--accent-line);box-shadow:0 0 0 3px var(--accent-soft)}
-textarea.code::placeholder{color:var(--faint)}
+/* code area: CodeMirror (components/CodeEditor.jsx) */
+.code{margin-top:10px}
+.code .cm-editor{font:400 14px/1.6 var(--mono);font-variant-ligatures:none;color:var(--ink);background:var(--sunken);border:1px solid var(--line);
+  border-radius:9px;transition:background .15s,border-color .15s,box-shadow .15s}
+.code .cm-editor.cm-focused{outline:none;background:var(--surface);border-color:var(--accent-line);box-shadow:0 0 0 3px var(--accent-soft)}
+.code .cm-scroller{font-family:inherit;line-height:inherit;max-height:420px;overflow:auto}
+.code .cm-content{padding:10px 13px;min-height:3.2em;tab-size:4}
+.code .cm-line{padding:0}
+.code .cm-placeholder{color:var(--faint)}
 .runbar{display:flex;align-items:center;gap:8px;margin-top:10px}
 kbd{font:500 11px/1 var(--mono);padding:3px 5px;border:1px solid color-mix(in srgb,currentColor 35%,transparent);border-radius:5px}
 button.gen,button.p2c{padding:7px 10px 7px 11px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-color:var(--accent-line)}

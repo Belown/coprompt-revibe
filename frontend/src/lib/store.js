@@ -3,8 +3,8 @@
 import * as Y from 'yjs';
 import { applyAwarenessUpdate, encodeAwarenessUpdate, removeAwarenessStates } from 'y-protocols/awareness';
 import { emit } from './bus.js';
-import { uid, ME, debounce } from './util.js';
-import { ydoc, awareness, b64, unb64, segs } from './ytext.js';
+import { uid, ME, debounce, hexcol } from './util.js';
+import { ydoc, awareness, b64, unb64, segs, live } from './ytext.js';
 import { toast } from './ui.js';
 import { local, ws } from './sync.js';
 import { LOCAL, ROOM, TOPIC } from '../config.js';
@@ -43,7 +43,7 @@ export function markSeen(id) { const b = S.blocks[id]; if (b && unseen(b)) { see
 // seeing a collaborator's change wins even when this device's clock is behind (a hybrid logical clock, per object).
 export function put(kind, obj) {
   obj.upd = Math.max(Date.now(), (S[kind][obj.id]?.upd || 0) + 1);
-  S[kind][obj.id] = obj;
+  S[kind][obj.id] = kind === 'blocks' ? live(obj) : obj;
   T.send({ t: 'put', kind, obj, epoch });
   emit();
 }
@@ -55,7 +55,7 @@ function snapshot(d) {
   const old = S, same = old && d.epoch === epoch;
   if (same) yq.push(Y.encodeStateAsUpdate(ydoc)); // typing done while disconnected (the server ignores what it has)
   awDirty = true; ySoon();
-  S = d.S; epoch = d.epoch;
+  S = d.S; epoch = d.epoch; Object.values(S.blocks).forEach(live);
   if (same) for (const kind of ['blocks', 'actions']) for (const o of Object.values(old[kind]))
     if (!(S[kind][o.id]?.upd >= o.upd)) { S[kind][o.id] = o; T.send({ t: 'put', kind, obj: o, epoch }); }
   if (!SEEN || (old && !same)) { initSeen(); ui.SOURCE = ui.TGTNODE = null; }
@@ -67,7 +67,10 @@ function onMsg(d) {
   if (d.t === 'y') {
     try {
       if (d.u) Y.applyUpdate(ydoc, unb64(d.u), 'remote');
-      if (d.aw) applyAwarenessUpdate(awareness, unb64(d.aw), 'remote');
+      if (d.aw) { // a collaborator's colour comes from their name here, never from what their client sent
+        applyAwarenessUpdate(awareness, unb64(d.aw), 'remote');
+        for (const st of awareness.getStates().values()) if (st?.user) { st.user.color = hexcol(String(st.user.name ?? '?')); delete st.user.colorLight; }
+      }
       if (d.gone != null) removeAwarenessStates(awareness, [d.gone], 'remote');
     } catch (e) { console.warn('bad Y.js message', e); }
     return;
@@ -79,7 +82,7 @@ function onMsg(d) {
   if (d.t !== 'put' || !S) return;
   const cur = S[d.kind][d.obj.id];
   if (cur && cur.upd > d.obj.upd) return;
-  S[d.kind][d.obj.id] = d.obj; emit();
+  S[d.kind][d.obj.id] = d.kind === 'blocks' ? live(d.obj) : d.obj; emit();
   if (d.kind === 'actions' && !cur && d.obj.owner === ME && d.obj.by !== ME) {
     const t = S.blocks[d.obj.tgt.b], seg = d.obj.tgt.n && t?.kind === 'p' && segs(t.id).find(s => s.id === d.obj.tgt.n);
     toast(`${d.obj.by} created a ${d.obj.type} on your ${t?.kind === 'h' ? 'task' : 'prompt'} “${seg ? seg.v : t ? plain(t) : '?'}”`);
@@ -140,5 +143,6 @@ export function seed(topic = TOPIC) {
   for (const [k, ...a] of SCENARIOS[id].blocks) k === 'h' ? H(...a) : P(...a);
   return S;
 }
-export function hardReset(newS) { S = newS; initSeen(); ui.SOURCE = ui.TGTNODE = null; emit(); }
-export function resetDemo() { const n = seed(S.scenario); hardReset(n); T.send({ t: 'reset', S: n }); } // the room's topic again
+export function hardReset(newS) { S = newS; Object.values(S.blocks).forEach(live); initSeen(); ui.SOURCE = ui.TGTNODE = null; emit(); }
+// the room's topic again. Sent before hardReset makes its code and titles live: the server writes them into Y.js
+export function resetDemo() { const n = seed(S.scenario); T.send({ t: 'reset', S: n }); hardReset(n); }
