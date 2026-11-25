@@ -32,6 +32,10 @@ Add a DeepSeek key under **API key** in the app. Alternatively, set `DEEPSEEK_AP
 
 The first load downloads Pyodide and its packages, which takes 20–40 s.
 
+**Backup on GitHub Pages:** <https://belown.github.io/coprompt-revibe/app/>, rebuilt on every push that touches `frontend/`. It has no backend, so it runs in local mode: one browser, with **Open as Bob** for the second window, and your own API key.
+
+**Backup on this machine** (the server is down): double-click `offline.cmd`, or run `node scripts/offline.mjs [room]`. It builds the app, runs the sync server and the app on this machine (ports 8787 and 8000, both must be free) and opens Alice's and Bob's windows. It needs no server, but it still needs internet for Pyodide and the LLM. Without a `.env`, enter your key with **API key**: localhost keeps its own key, separate from the deployed site's.
+
 Tests:
 
 - `cd backend && npm test`: sync protocol, Y.js, limits.

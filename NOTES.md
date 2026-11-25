@@ -155,6 +155,10 @@ The library owns the state, and React re-renders on every change. Two places del
 | Fig. 14 link input = current code of both segments | Adds the linked phrases, A's `previous_code`, the user's note, and the sentence "the user linked them because they denote the same value" (taken from §6.2.5) | Without these, the check never propagated a rename (see findings). |
 | Fig. 14's few-shot example | Rewritten to be consistent: A's old and new code, and only B updated | In the paper the example's input shows A *before* the change, its reasoning says A was changed, and `updated_code` repeats A. |
 | Node text edited in place (Fig. 7c) | Nodes are atomic chips; **double-click a chip to rename it**, which also regenerates the block | Renaming an atomic chip needed a separate interaction. |
+| Explanation view drawn over the block, a curved line joining a prompt phrase to its code (Fig. 3d) | A panel under the block with its own copy of the prompt and code; phrase and code lines share a colour, and hovering one dims the rest. A numbered list of steps below | Matching colours carry the same link without drawing lines over a block whose layout changes. The step list is the "high-level overview of all the steps" from §6.2.1. |
+| Side-by-side diff with line numbers (Fig. 3e) | One inline diff of the selected version against the current one: word by word for the prompt, line by line for the code, red removed and green added | Same information (§6.1: "differences between current and previous versions of both prompts and code"), in less width. |
+| Wiki rows marked with a link or share icon (Fig. 3b) | Coloured action dots on rows and node chips, mechanism pills on hover | Same dots as on the blocks (decision 10 below). |
+| The history shows the "generated result for each iteration" (P2, §8.2.3) | Not built: a version keeps the prompt and code, not the run output | A plot is a base64 PNG, and a block, history included, is sent as one message capped at `MAX_MSG_BYTES` (2 MB), so 40 versions with plots would not fit. Re-running a restored version shows its result. |
 
 ## Underspecified details (decisions I had to make)
 
@@ -171,6 +175,7 @@ The library owns the state, and React re-renders on every change. Two places del
 11. **Version granularity for history.** I store a version on every code change, and when you leave a prompt whose text changed without regenerating; not on every keystroke.
 12. **When does a request end?** The paper says the requester's block updates "whenever" the collaborator's work changes (§5, Fig. 5c), but also that requests get "resolved". A fulfilled request keeps tracking the block that fulfilled it. It reopens if a later change breaks it, and stops only when the requester clicks **Stop tracking**.
 13. **What counts as "modifications made" while offline (§5)?** Any new version of a prompt block that the user did not make in their own window, or that a mechanism made automatically. It stays highlighted until the user clicks the block.
+14. **The R → A → E chain in the history view (Fig. 3e)** is never explained: three user initials joined by arrows above the diff, apparently the path an update took through linked prompts. Not built. The history row already says who made each version and which action (refer, request, share, link) caused it.
 
 ## What resisted reimplementation / what the paper made look easy
 
