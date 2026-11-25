@@ -39,7 +39,7 @@ Tests:
 
 ## Deploy
 
-`cp .env.example .env`, edit it, then `docker compose up -d --build`. This starts Caddy, which serves the frontend and proxies `/api` to the sync server; TLS is terminated in front of it. See *Deploy* in [NOTES.md](NOTES.md).
+`git clone https://github.com/Belown/coprompt-revibe.git`, `cp .env.example .env` and edit it, then `docker compose up -d`. This starts Caddy, which serves the frontend and proxies `/api` to the sync server (TLS is terminated in front of it), and the deploy service: after every push to `main`, GitHub Actions asks the server to pull and rebuild. See *Deploy* in [NOTES.md](NOTES.md).
 
 ## Citation
 

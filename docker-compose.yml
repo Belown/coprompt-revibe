@@ -1,21 +1,41 @@
 # Everything for coprompt-revibe.wangleishen.com: Caddy serves the built frontend and proxies /api to the backend.
-#   cp .env.example .env   # then edit
-#   docker compose up -d --build
+#   cp .env.example .env   # then edit (optional: without it the site runs on 8080, rooms live in a Docker volume, no server LLM key)
+#   docker compose up -d
 services:
   web:
     build: ./frontend
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${HTTP_PORT:?set HTTP_PORT in .env}:80"
+      - "127.0.0.1:${HTTP_PORT:-8080}:80"
     depends_on:
       - sync
 
   sync:
     build: ./backend
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
       PORT: 8787        # Caddyfile proxies to sync:8787
       DATA_DIR: /data
     volumes:
-      - "${HOST_DATA_DIR:?set HOST_DATA_DIR in .env}:/data"
+      # A host folder when HOST_DATA_DIR is set, else the Docker volume "rooms".
+      - "${HOST_DATA_DIR:-rooms}:/data"
+
+  # Auto-deploy: after a push to main, GitHub Actions calls https://<domain>/_deploy, and this pulls main and rebuilds
+  # web and sync (scripts/deploy-hook.mjs). It only acts when called, and GitHub calls the domain, so on any other
+  # machine (a laptop running the site) it stays idle. It drives Docker through the socket, which is root on the host.
+  deploy:
+    image: node:22-alpine
+    restart: unless-stopped
+    environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    working_dir: /repo
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/repo
+    command: ["sh", "-c", "apk add --no-cache git docker-cli docker-cli-compose >/dev/null && git config --global --add safe.directory /repo && exec node scripts/deploy-hook.mjs"]
+
+volumes:
+  rooms:

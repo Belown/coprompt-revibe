@@ -1,0 +1,19 @@
+# After every push to main, tell the server to pull and rebuild (the deploy service, scripts/deploy-hook.mjs).
+# Run it by hand from the Actions tab to deploy again.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask the server to deploy
+        env:
+          URL: ${{ vars.DEPLOY_URL || 'https://coprompt-revibe.wangleishen.com/_deploy' }}
+        run: curl -fsS --retry 3 -X POST "$URL"
