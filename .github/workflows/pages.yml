@@ -1,6 +1,6 @@
 # The offline demo on GitHub Pages (https://belown.github.io/coprompt-revibe/demo/), independent of our own server.
 # Pages has no backend, so the app always runs as the demo there (config.js): local mode, Titanic only, scripted model.
-# Needs Settings → Pages → Source: GitHub Actions.
+# Needs Settings → Pages → Source: GitHub Actions (set). Run it by hand: Actions → Pages backup (left list) → Run workflow.
 name: Pages backup
 on:
   push:
