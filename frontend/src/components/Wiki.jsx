@@ -82,8 +82,7 @@ export default function Wiki() {
     } else {
       const sg = segs(b.id);
       rows.push(<div key={b.id} className={cls(b, 'wrow wp' + (src?.b === b.id ? ' is-src' : ''))} style={{ '--d': dep[b.id] }} data-bid={b.id} {...drag(b)}>
-        {grip(b)}<Dots types={types(b.id)} />
-        <Avatar u={b.editor || owner(b.id)} />
+        {grip(b)}<Avatar u={b.editor || owner(b.id)} />
         <span className="wtext" tabIndex={0} onKeyDown={keyJump(b.id)} onClick={e => {
           const c = e.target.closest('.node');
           if (c) { ui.TGTNODE = ui.TGTNODE?.n === c.dataset.n ? null : { b: b.id, n: c.dataset.n }; return emit(); }
@@ -91,6 +90,7 @@ export default function Wiki() {
         }}>{sg.length ? sg.map((s, i) => s.t === 'node'
           ? <Chip key={s.id} s={s} types={types(b.id, s.id)} title="Click to target this node" selected={ui.TGTNODE?.n === s.id} />
           : <span key={i} data-si={i}>{s.v}</span>) : '(empty prompt)'}</span>
+        <Dots types={types(b.id)} />
         {b.notes?.length ? <span className="wn" title={`${b.notes.length} comment(s)`}><Icon name="comment" />{b.notes.length}</span> : null}
         {src?.b === b.id ? <span className="srctag">source</span> : <Pills b={b} kinds={targetKinds(b.id)} />}
       </div>);

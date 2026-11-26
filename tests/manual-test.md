@@ -63,14 +63,14 @@ Every step says who acts (**A** = Alice's window, **B** = Bob's). Type the text 
 | 6.1 | A | In the encode prompt from 2.3, double-click `df_encoded` and click **Make node**. | The source bar shows `df_encoded`. |
 | 6.2 | A | In the wiki, on Bob's heatmap row, click the chip `df_encoded` (it gets a dark outline), then click the **link** icon on that row. Click **Link**. | A purple link dot appears on both nodes. If Bob's row has no `df_encoded` chip (the refer in 3.3 worded it differently), click the link icon without picking a chip: the link then covers his whole prompt. |
 | 6.3 | A | Double-click the `df_encoded` chip in Alice's prompt, rename it to `df_num`, and click **Rename**. | Alice's block regenerates. Seconds later, Bob's heatmap block updates by itself to use `df_num` and shows *Auto-updated · link* with a **Review** link. |
-| 6.4 | B | Click **Review**, then pick the version just before *link* in the list. | The history opens. The diff shows what the link changed, and **Restore this version** would undo it. |
+| 6.4 | B | Click **Review**. In the history's timeline, pick the *link* node, then the node before it. | The history opens on the newest version. The *link* node shows the link icon and, side by side, what the link changed; on the node before it, **Restore this version** would undo it. |
 
 ## 7. Reading and tracking
 
 | # | Who | Do | Expect |
 |---|---|---|---|
 | 7.1 | A | On the encode block, click the **light bulb** (Explain). | Phrases of the prompt and lines of the code are highlighted in matching colours. Hovering one dims the rest. |
-| 7.2 | B | On the heatmap block, click the **clock** (History). Pick an older version. | Versions are listed with time, person and action. The prompt and code show a diff. **Restore this version** brings it back, and A sees the restored version too. |
+| 7.2 | B | On the heatmap block, click the **clock** (History). Pick an older version. | Versions are nodes on a timeline, oldest first, each with its author's initial and colour; hovering one shows time and action. Picking one shows the version before it on the left and it on the right, prompt first, with line numbers, removed lines red, added lines green and gaps hatched. **Restore this version** brings it back, and A sees the restored version too. |
 | 7.3 | B | Click the **speech bubble** on Alice's encode block, type `why not one-hot?`, and press Enter. | A gets a toast with the comment. The block's bubble shows **1** in both windows, and the wiki row shows a comment count. |
 | 7.4 | A | In the wiki, click the arrow next to **Feature Analysis**, then click the row *remove fare outliers…*. | The section folds and unfolds. Clicking a row scrolls the editor to that block and flashes it. |
 

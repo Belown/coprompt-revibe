@@ -301,7 +301,7 @@ try {
 
   // 9. explain + history views render; wiki shows dots, message panel populated
   check(await A.ev(`(async()=>{ const id = '${encId}'; el(id).querySelector('[aria-label=Explain]').click(); return until(() => el(id).querySelector('.xcode mark, .xcode div[data-i]')); })()`), 'explain view renders');
-  check(await A.ev(`(async()=>{ const id = byText('drop columns').id; el(id).querySelector('[aria-label=History]').click(); await until(() => el(id).querySelector('.hrow')); el(id).querySelector('.hrow').click(); return until(() => el(id).querySelector('.dcode')); })()`), 'history diff renders');
+  check(await A.ev(`(async()=>{ const id = byText('drop columns').id; el(id).querySelector('[aria-label=History]').click(); await until(() => el(id).querySelector('.hv-v')); el(id).querySelector('.hv-v').click(); return until(() => el(id).querySelector('.hv-grid .hv-c')); })()`), 'history diff renders');
   check(await A.ev(`document.querySelectorAll('#wiki .dots i').length > 0 && document.querySelectorAll('#msgs .msg').length >= 6`), 'wiki dots + message panel populated');
 
   check(await A.ev(`(async()=>{ document.querySelector('#wikiCard .help').click(); await until(() => document.querySelector('#modal .mhelp'));

@@ -209,9 +209,9 @@ try {
   check(await B(`until(() => el('${hm}').querySelectorAll('.xsteps li').length > 1 && el('${hm}').querySelector('.xprompt mark'))`), '9. explanation view: steps and highlighted phrases');
   await view('Alice');
   await click('Alice', q(`[data-id="${d}"] [aria-label=History]`));
-  check(await A(`until(() => el('${d}').querySelectorAll('.hrow').length >= 3)`), '9. history view lists the versions');
-  await click('Alice', q(`[data-id="${d}"] .hrow:last-child`));
-  check(await A(`until(() => el('${d}').querySelector('.dcode .del, .dcode .ins'))`), '9. picking a version shows the diff');
+  check(await A(`until(() => el('${d}').querySelectorAll('.hv-v').length >= 3)`), '9. history view shows the versions on its timeline');
+  await click('Alice', q(`[data-id="${d}"] .hv-v:first-child`));
+  check(await A(`until(() => el('${d}').querySelector('.hv-c.del, .hv-c.ins'))`), '9. picking a version shows the side-by-side diff');
   await click('Alice', q(`[data-id="${d}"] [aria-label=Comments]`));
   check(await A(`until(() => el('${d}').querySelector('.panel textarea, .panel input'))`), '9. the comments panel opens');
 
