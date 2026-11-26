@@ -4,6 +4,7 @@ import { emit } from './bus.js';
 import { ordered } from './model.js';
 import { toast, toastErr } from './ui.js';
 import { uid } from './util.js';
+import { DEMO } from '../config.js';
 import { pyWorkerMain } from './pyWorker.js';
 
 // Run cache: the worker keeps, for the chain it ran last, a copy of the namespace after each block. A run whose blocks
@@ -69,7 +70,12 @@ worker.onmessage = ({ data }) => {
   if (data.stat) { ui.py = { text: data.stat, s: /ready/.test(data.stat) ? 'ok' : /failed/.test(data.stat) ? 'err' : 'load' }; emit(); }
   if (data.id) { calls[data.id](data); delete calls[data.id]; }
 };
-worker.postMessage({ init: true, csvUrl: new URL('data/titanic.csv', location.href).href });
+// The offline demo (DEMO) runs Titanic with pandas and matplotlib only, from its own copy of Pyodide when the build has
+// one (scripts/fetch-pyodide.mjs puts it in public/pyodide/), so it needs no CDN; everything else uses the CDN.
+const CDN = 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/';
+worker.postMessage({ init: true, csvUrl: new URL('data/titanic.csv', location.href).href,
+  bases: DEMO ? [new URL('../pyodide/', location.href).href, CDN] : [CDN],
+  pkgs: DEMO ? ['pandas', 'matplotlib'] : ['pandas', 'matplotlib', 'scipy', 'scikit-learn', 'micropip'] });
 export const pyRun = cells => new Promise(r => { const id = uid(); calls[id] = r; worker.postMessage({ id, cells, runner: RUNNER }); });
 
 // Run executes the chain of code blocks above this one; the worker's run cache (RUNNER) skips the unchanged prefix

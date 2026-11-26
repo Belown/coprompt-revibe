@@ -6,7 +6,9 @@ import { spawn } from 'node:child_process';
 const EDGE = process.env.E2E_BROWSER || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const BASE = process.env.DEMO_BASE || 'http://localhost:8000/demo/';
 const [W, H] = (process.env.DEMO_SIZE || '1280,720').split(',').map(Number);
-const proc = spawn(EDGE, ['--headless=new', '--disable-gpu', '--remote-debugging-port=9334', `--window-size=${W},${H}`,
+// DEMO_OFFLINE=1: the CDN and Google Fonts do not resolve, as without internet (the demo must use its own Pyodide)
+const OFFLINE = process.env.DEMO_OFFLINE ? ['--host-resolver-rules=MAP cdn.jsdelivr.net ~NOTFOUND, MAP fonts.googleapis.com ~NOTFOUND, MAP fonts.gstatic.com ~NOTFOUND'] : [];
+const proc = spawn(EDGE, ['--headless=new', '--disable-gpu', ...OFFLINE, '--remote-debugging-port=9334', `--window-size=${W},${H}`,
   `--user-data-dir=${process.env.TEMP || '/tmp'}/cp_demo_${Date.now()}`, 'about:blank'], { stdio: 'ignore' });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let ok = true, nPass = 0, nAll = 0;
@@ -85,7 +87,8 @@ async function hover(u, sel) { await mouse('mouseMoved', await at(u, sel)); awai
 const type = async t => { await send('Input.insertText', { text: t }); await sleep(100); };
 const key = async (k, code, vk, modifiers = 0, commands) => { for (const t of ['rawKeyDown', 'keyUp']) await send('Input.dispatchKeyEvent', { type: t, key: k, code, windowsVirtualKeyCode: vk, modifiers, ...(t === 'rawKeyDown' && commands && { commands }) }); await sleep(120); };
 const enter = () => key('Enter', 'Enter', 13);
-const view = async v => { await click0(`[data-v=${v}]`); await sleep(300); };
+// DEMO_VIEW=both: the whole guide side by side (switching views is then skipped)
+const view = async v => { await click0(`[data-v=${process.env.DEMO_VIEW || v}]`); await sleep(300); };
 async function click0(sel) { const p = await ev(`(r => [r.x + r.width / 2, r.y + r.height / 2])(document.querySelector('${sel}').getBoundingClientRect())`); await mouse('mousePressed', p); await mouse('mouseReleased', p); }
 const q = s => JSON.stringify(s);
 // + block under a heading (hover shows its controls), type the prompt, Enter: the new block's id
@@ -129,6 +132,7 @@ try {
   for (let i = 0; i < 150 && !(await ev(`!!(${up('Alice')} && ${up('Bob')})`)); i++) await sleep(200);
   for (const f of [A, B]) await f(`(${helpers})(); 1`);
   check(await A(`until(() => ordered().some(b => b.author === 'Alice') && ordered().some(b => b.author === 'Bob'))`), 'the demo starts with Alice and Bob owning their tasks');
+  if (process.env.DEMO_VIEW) await view(process.env.DEMO_VIEW);
   const t0 = Date.now();
   const py = await A(`(async()=>{ await until(() => cp.ui.py.s !== 'load' && ${fr('Bob').replace('document', 'parent.document')}.cp.ui.py.s !== 'load', 180000); return cp.ui.py; })()`);
   if (py.s !== 'ok') throw new Error('Python did not load (CDN unreachable?): ' + py.text);

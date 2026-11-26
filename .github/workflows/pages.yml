@@ -5,7 +5,7 @@ name: Pages backup
 on:
   push:
     branches: [main]
-    paths: [frontend/**, .github/workflows/pages.yml]
+    paths: [frontend/**, scripts/fetch-pyodide.mjs, .github/workflows/pages.yml]
   workflow_dispatch:
 permissions:
   contents: read
@@ -31,6 +31,7 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      - run: node ../scripts/fetch-pyodide.mjs   # the demo's own Pyodide: no CDN needed when it runs
       - run: npm run build
       - uses: actions/upload-pages-artifact@v5
         with:

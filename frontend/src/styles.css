@@ -412,6 +412,8 @@ i[data-unlink]{cursor:pointer;box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px va
   .gen kbd{display:none}
 }
 /* phones: the prompt gets the whole row, its tools drop to a row of their own */
+/* narrow but with a mouse (the offline demo side by side): a heading's controls also show on hover */
+@media (max-width:880px) and (hover:hover){.hb:hover .ctl{display:inline-flex}}
 @media (max-width:600px){
   .phead{flex-wrap:wrap;row-gap:2px}
   .phead .tools{flex-basis:100%;justify-content:flex-end}
