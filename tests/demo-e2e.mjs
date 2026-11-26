@@ -8,8 +8,15 @@ const BASE = process.env.DEMO_BASE || 'http://localhost:8000/demo/';
 const [W, H] = (process.env.DEMO_SIZE || '1280,720').split(',').map(Number);
 // DEMO_OFFLINE=1: the CDN and Google Fonts do not resolve, as without internet (the demo must use its own Pyodide)
 const OFFLINE = process.env.DEMO_OFFLINE ? ['--host-resolver-rules=MAP cdn.jsdelivr.net ~NOTFOUND, MAP fonts.googleapis.com ~NOTFOUND, MAP fonts.gstatic.com ~NOTFOUND'] : [];
-const proc = spawn(EDGE, ['--headless=new', '--disable-gpu', ...OFFLINE, '--remote-debugging-port=9334', `--window-size=${W},${H}`,
-  `--user-data-dir=${process.env.TEMP || '/tmp'}/cp_demo_${Date.now()}`, 'about:blank'], { stdio: 'ignore' });
+// Windows' native occlusion detection stops all rendering in a browser window it thinks is covered, which happens on an
+// idle machine (a test run overnight): no frames, and every mouse event then waits 5 s. A presenter's window is in front.
+const NO_OCCLUSION = ['--disable-features=CalculateNativeWinOcclusion', '--disable-backgrounding-occluded-windows'];
+// DEMO_HEADFUL=1: a visible window instead of headless
+// a throwaway browser profile (~0.5 GB with Pyodide cached), deleted when the run ends
+const PROFILE = `${process.env.TEMP || '/tmp'}/cp_demo_${Date.now()}`;
+const cleanup = async () => { proc.kill(); for (let i = 0; i < 20; i++) { try { (await import('node:fs')).rmSync(PROFILE, { recursive: true, force: true }); return; } catch { await new Promise(r => setTimeout(r, 500)); } } };
+const proc = spawn(EDGE, [...(process.env.DEMO_HEADFUL ? ['--window-position=40,40', '--no-first-run', '--no-default-browser-check'] : ['--headless=new', '--disable-gpu']), ...NO_OCCLUSION, ...OFFLINE, '--remote-debugging-port=9334', `--window-size=${W},${H}`,
+  `--user-data-dir=${PROFILE}`, 'about:blank'], { stdio: 'ignore' });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let ok = true, nPass = 0, nAll = 0;
 const check = (c, m) => { nAll++; if (c) nPass++; console.log(c ? 'PASS' : 'FAIL', m); if (!c) ok = false; };
@@ -75,12 +82,10 @@ async function at(u, sel, word) {
   }
   throw new Error(`not found in ${u}: ${sel} ${word ?? ''}`);
 }
-// Headless Edge on some machines stops rendering after ~20 s (any page, even an animated one), and then each mouseMoved
-// waits 5 s for its acknowledgement. Hover (mouseMoved) is only sent where the UI needs it; clicks press and release.
 const mouse = (type, [x, y], clickCount = 1) => send('Input.dispatchMouseEvent', { type, x, y, button: type === 'mouseMoved' ? 'none' : 'left', clickCount });
-async function click(u, sel, word) { const p = await at(u, sel, word); await mouse('mousePressed', p); await mouse('mouseReleased', p); await sleep(150); }
+async function click(u, sel, word) { const p = await at(u, sel, word); await mouse('mouseMoved', p); await sleep(60); await mouse('mousePressed', p); await mouse('mouseReleased', p); await sleep(150); }
 async function dbl(u, sel, word) {
-  const p = await at(u, sel, word);
+  const p = await at(u, sel, word); await mouse('mouseMoved', p); await sleep(60);
   await mouse('mousePressed', p, 1); await mouse('mouseReleased', p, 1); await mouse('mousePressed', p, 2); await mouse('mouseReleased', p, 2); await sleep(250);
 }
 async function hover(u, sel) { await mouse('mouseMoved', await at(u, sel)); await sleep(200); }
@@ -89,7 +94,7 @@ const key = async (k, code, vk, modifiers = 0, commands) => { for (const t of ['
 const enter = () => key('Enter', 'Enter', 13);
 // DEMO_VIEW=both: the whole guide side by side (switching views is then skipped)
 const view = async v => { await click0(`[data-v=${process.env.DEMO_VIEW || v}]`); await sleep(300); };
-async function click0(sel) { const p = await ev(`(r => [r.x + r.width / 2, r.y + r.height / 2])(document.querySelector('${sel}').getBoundingClientRect())`); await mouse('mousePressed', p); await mouse('mouseReleased', p); }
+async function click0(sel) { const p = await ev(`(r => [r.x + r.width / 2, r.y + r.height / 2])(document.querySelector('${sel}').getBoundingClientRect())`); await mouse('mouseMoved', p); await mouse('mousePressed', p); await mouse('mouseReleased', p); }
 const q = s => JSON.stringify(s);
 // + block under a heading (hover shows its controls), type the prompt, Enter: the new block's id
 async function newPrompt(u, heading, prompt) {
@@ -214,7 +219,7 @@ try {
   await type("# survival rate by class"); await enter(); await type("df.groupby('Pclass')['Survived'].mean()");
   await click('Alice', q(`[data-id="${cf}"] .p2c`));
   check(await A(`until(() => text(S.blocks['${cf}']) === 'compute the survival rate by class in df')`), '10. code first: Prompt from code writes the prompt');
-  check((await runBlock('Alice', cf)).includes('Pclass'), '10. and the block runs');
+  { const o = await runBlock('Alice', cf); check(o.includes('Pclass'), '10. and the block runs' + (o.includes('Pclass') ? '' : ` (code ${JSON.stringify(await A(`S.blocks['${cf}'].code`))}, output ${JSON.stringify(o.slice(0, 200))})`)); }
 
   await view('both');
   check(await ev(`[...document.querySelectorAll('iframe')].every(f => getComputedStyle(f).visibility === 'visible' && f.offsetWidth > 400)`), 'side by side shows both views');
@@ -235,6 +240,10 @@ try {
   for (let i = 0; i < 150 && !(await ev(`!!(${up('Alice')} && ${up('Bob')})`)); i++) await sleep(200);
   for (const f of [A, B]) await f(`(${helpers})(); 1`);
   check(await A(`until(() => ordered().filter(b => b.kind === 'p').length === 1 && !Object.keys(S.actions).length)`), 'a reload keeps the reset notebook');
-} catch (e) { check(false, 'crashed: ' + e.message); }
+} catch (e) {
+  check(false, 'crashed: ' + e.message);
+  const shot = await send('Page.captureScreenshot', { format: 'png' }).catch(() => null);
+  if (shot?.result) (await import('node:fs')).writeFileSync(`${process.env.TEMP || '/tmp'}/demo-crash.png`, Buffer.from(shot.result.data, 'base64'));
+}
 console.log(`${nPass}/${nAll} passed`); console.log(ok ? 'ALL PASS' : 'SOME FAILED');
-proc.kill(); process.exit(ok ? 0 : 1);
+await cleanup(); process.exit(ok ? 0 : 1);

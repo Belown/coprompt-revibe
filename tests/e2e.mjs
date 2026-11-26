@@ -5,8 +5,12 @@ import { spawn } from 'node:child_process';
 const EDGE = process.env.E2E_BROWSER || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const BASE = process.env.E2E_BASE || 'http://localhost:8000/app/';
 const ROOM = '&room=e2e' + Date.now(); // a fresh notebook per run (also on the sync backend, when one is running)
-const proc = spawn(EDGE, ['--headless=new', '--disable-gpu', '--remote-debugging-port=9333',
-  `--user-data-dir=${process.env.TEMP || '/tmp'}/cp_e2e_${Date.now()}`, 'about:blank'], { stdio: 'ignore' });
+// no native occlusion detection: on an idle machine it stops all rendering (see tests/demo-e2e.mjs)
+// a throwaway browser profile (~0.5 GB with Pyodide cached), deleted when the run ends
+const PROFILE = `${process.env.TEMP || '/tmp'}/cp_e2e_${Date.now()}`;
+const cleanup = async () => { proc.kill(); for (let i = 0; i < 20; i++) { try { (await import('node:fs')).rmSync(PROFILE, { recursive: true, force: true }); return; } catch { await new Promise(r => setTimeout(r, 500)); } } };
+const proc = spawn(EDGE, ['--headless=new', '--disable-gpu', '--disable-features=CalculateNativeWinOcclusion', '--disable-backgrounding-occluded-windows', '--remote-debugging-port=9333',
+  `--user-data-dir=${PROFILE}`, 'about:blank'], { stdio: 'ignore' });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let ok = true, nPass = 0, nAll = 0;
 const check = (c, m) => { nAll++; if (c) nPass++; console.log(c ? 'PASS' : 'FAIL', m); if (!c) ok = false; };
@@ -359,4 +363,4 @@ try {
   console.log('LLM calls (stubbed) in Alice:', await A.ev('__calls'));
   await A.kill(); await B.kill();
 } catch (e) { ok = false; console.log('ERROR', e.message); }
-proc.kill(); console.log(`${nPass}/${nAll} passed`); console.log(ok ? 'ALL PASS' : 'SOME FAILED'); process.exit(ok ? 0 : 1);
+console.log(`${nPass}/${nAll} passed`); console.log(ok ? 'ALL PASS' : 'SOME FAILED'); await cleanup(); process.exit(ok ? 0 : 1);
