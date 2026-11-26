@@ -83,9 +83,12 @@ async function at(u, sel, word) {
   throw new Error(`not found in ${u}: ${sel} ${word ?? ''}`);
 }
 const mouse = (type, [x, y], clickCount = 1) => send('Input.dispatchMouseEvent', { type, x, y, button: type === 'mouseMoved' ? 'none' : 'left', clickCount });
-async function click(u, sel, word) { const p = await at(u, sel, word); await mouse('mouseMoved', p); await sleep(60); await mouse('mousePressed', p); await mouse('mouseReleased', p); await sleep(150); }
+// On this machine, once idle, every browser stops drawing ~20 s after start (a bare button page too; GPU on or off);
+// then each mouseMoved waits 5 s for its acknowledgement while press and release stay instant. So clicks press and
+// release, and only hover() moves the mouse, where the UI needs a hover.
+async function click(u, sel, word) { const p = await at(u, sel, word); await mouse('mousePressed', p); await mouse('mouseReleased', p); await sleep(150); }
 async function dbl(u, sel, word) {
-  const p = await at(u, sel, word); await mouse('mouseMoved', p); await sleep(60);
+  const p = await at(u, sel, word);
   await mouse('mousePressed', p, 1); await mouse('mouseReleased', p, 1); await mouse('mousePressed', p, 2); await mouse('mouseReleased', p, 2); await sleep(250);
 }
 async function hover(u, sel) { await mouse('mouseMoved', await at(u, sel)); await sleep(200); }
@@ -94,7 +97,7 @@ const key = async (k, code, vk, modifiers = 0, commands) => { for (const t of ['
 const enter = () => key('Enter', 'Enter', 13);
 // DEMO_VIEW=both: the whole guide side by side (switching views is then skipped)
 const view = async v => { await click0(`[data-v=${process.env.DEMO_VIEW || v}]`); await sleep(300); };
-async function click0(sel) { const p = await ev(`(r => [r.x + r.width / 2, r.y + r.height / 2])(document.querySelector('${sel}').getBoundingClientRect())`); await mouse('mouseMoved', p); await mouse('mousePressed', p); await mouse('mouseReleased', p); }
+async function click0(sel) { const p = await ev(`(r => [r.x + r.width / 2, r.y + r.height / 2])(document.querySelector('${sel}').getBoundingClientRect())`); await mouse('mousePressed', p); await mouse('mouseReleased', p); }
 const q = s => JSON.stringify(s);
 // + block under a heading (hover shows its controls), type the prompt, Enter: the new block's id
 async function newPrompt(u, heading, prompt) {
