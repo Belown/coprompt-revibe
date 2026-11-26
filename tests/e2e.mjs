@@ -169,6 +169,7 @@ try {
   await B.ev(`setSource(hid('3. Feature'))`);
   check(await B.ev(`until(() => { const p = [...document.querySelectorAll('#wiki .wh .pill')].map(x => x.textContent); return p.includes('link') && !p.includes('refer'); })`), 'section source offers share/link on headings (gap 4)');
   const hl = B.ev(`mech('link', hid('2. Encode'), document.body)`); await B.ev(`until(() => clickOK('same data'))`); await hl;
+  await A.ev(`until(() => acts('link').some(a => a.tgt.b === hid('2. Encode')))`); // through a real server the link takes a moment to reach Alice
   const l0 = await B.ev(`nHist('${bId}', 'link')`);
   await A.ev(`commitCode('${encId}', "df_encoded = pd.get_dummies(df, drop_first=True)\\nprint(df_encoded.shape)", 'edit code')`);
   check(await B.ev(`until(() => nHist('${bId}', 'link') > ${l0})`), 'a change in section 2 reaches section 3 through the heading link');
